@@ -18,6 +18,7 @@ import {
     WOS,
 } from "@/store/global";
 import {
+    clearSessionAttention,
     clearSessionWorking,
     markSessionAttention,
     markSessionWorking,
@@ -527,6 +528,8 @@ export class TermWrap {
 
     // --- session "working" (live output) detection for the sidebar ---
     private workingTimer: ReturnType<typeof setTimeout> | null = null;
+    private doneTimer: ReturnType<typeof setTimeout> | null = null;
+    private wasActive = false;
     private cachedResumeId: string | null | undefined = undefined;
 
     private getResumeSessionId(): string | null {
@@ -540,9 +543,21 @@ export class TermWrap {
     private notifyWorking() {
         const sid = this.getResumeSessionId();
         if (!sid) return;
+        // live output => working (spinner), and it's no longer waiting for input
         markSessionWorking(sid);
+        clearSessionAttention(sid);
+        this.wasActive = true;
         if (this.workingTimer) clearTimeout(this.workingTimer);
-        this.workingTimer = setTimeout(() => clearSessionWorking(sid), 1200);
+        this.workingTimer = setTimeout(() => clearSessionWorking(sid), 1000);
+        // output stayed quiet for a while after activity => turn finished
+        if (this.doneTimer) clearTimeout(this.doneTimer);
+        this.doneTimer = setTimeout(() => {
+            if (this.wasActive) {
+                this.wasActive = false;
+                markSessionAttention(sid);
+                playDoneSound();
+            }
+        }, 3000);
     }
 
     handleNewFileSubjectData(msg: WSFileEventData) {

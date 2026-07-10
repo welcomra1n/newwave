@@ -73,6 +73,7 @@ export function playDoneSound() {
     try {
         const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
         const ctx = new Ctx();
+        if (ctx.state === "suspended") void ctx.resume();
         const play = (freq: number, start: number, dur: number) => {
             const o = ctx.createOscillator();
             const g = ctx.createGain();
@@ -230,6 +231,17 @@ async function saveProjects(list: string[]) {
 
 const UNGROUPED = "__ungrouped__";
 
+const SESSION_COLORS: { label: string; value: string }[] = [
+    { label: "빨강", value: "#e11d1d" },
+    { label: "주황", value: "#ff6a00" },
+    { label: "노랑", value: "#f5b400" },
+    { label: "초록", value: "#16a34a" },
+    { label: "파랑", value: "#2563eb" },
+    { label: "보라", value: "#9333ea" },
+    { label: "청록", value: "#0891b2" },
+    { label: "회색", value: "#4b5563" },
+];
+
 const SessionItem = memo(
     ({
         session,
@@ -308,6 +320,16 @@ const SessionItem = memo(
             [session.sessionid, onChanged]
         );
 
+        const setColor = useCallback(
+            (c: string) => {
+                fireAndForget(async () => {
+                    await RpcApi.SetCliSessionMetaCommand(TabRpcClient, { sessionid: session.sessionid, color: c });
+                    onChanged();
+                });
+            },
+            [session.sessionid, onChanged]
+        );
+
         const onContextMenu = useCallback(
             (e: React.MouseEvent) => {
                 e.preventDefault();
@@ -319,16 +341,35 @@ const SessionItem = memo(
                         click: () => setProject(p),
                     })),
                 ];
+                const colorMenu: ContextMenuItem[] = [
+                    { label: (session.color ? "" : "✓ ") + "없음", click: () => setColor("") },
+                    { type: "separator" },
+                    ...SESSION_COLORS.map((c) => ({
+                        label: (session.color === c.value ? "✓ " : "") + c.label,
+                        click: () => setColor(c.value),
+                    })),
+                ];
                 const menu: ContextMenuItem[] = [
                     { label: "이름 변경", click: startRename },
                     { label: session.pinned ? "고정 해제" : "상단 고정", click: togglePin },
+                    { label: "색상", submenu: colorMenu },
                     { label: "폴더로 이동", submenu: projectMenu },
                     { type: "separator" },
                     { label: "삭제 (휴지통)", click: doDelete },
                 ];
                 ContextMenuModel.getInstance().showContextMenu(menu, e);
             },
-            [session.pinned, session.project, projects, startRename, togglePin, doDelete, setProject]
+            [
+                session.pinned,
+                session.project,
+                session.color,
+                projects,
+                startRename,
+                togglePin,
+                doDelete,
+                setProject,
+                setColor,
+            ]
         );
 
         return (
@@ -457,6 +498,26 @@ const SessionSidebar = memo(() => {
     useEffect(() => {
         load();
     }, [load, listVersion]);
+
+    // Keep any OPEN block's header (title + color) in sync with the session's
+    // alias/color, so a block opened before those were set still matches.
+    useEffect(() => {
+        for (const s of sessions) {
+            if (!s.alias && !s.color) continue;
+            const blockId = findOpenBlockId(s.sessionid);
+            if (!blockId) continue;
+            const meta: MetaType = {};
+            const curText = globalStore.get(getBlockMetaKeyAtom(blockId, "frame:text"));
+            if (s.alias && curText !== s.alias) meta["frame:text"] = s.alias;
+            const curBg = globalStore.get(getBlockMetaKeyAtom(blockId, "frame:text:bg"));
+            if (s.color && curBg !== s.color) meta["frame:text:bg"] = s.color;
+            if (Object.keys(meta).length > 0) {
+                fireAndForget(() =>
+                    RpcApi.SetMetaCommand(TabRpcClient, { oref: WOS.makeORef("block", blockId), meta })
+                );
+            }
+        }
+    }, [sessions, activeIds]);
 
     const startResize = useCallback(
         (e: React.MouseEvent) => {

@@ -545,14 +545,16 @@ function registerGlobalKeys() {
         simpleCloseStaticTab();
         return true;
     });
-    globalKeyMap.set("Cmd:m", () => {
+    const magnifyFocused = () => {
         const layoutModel = getLayoutModelForStaticTab();
         const focusedNode = globalStore.get(layoutModel.focusedNode);
         if (focusedNode != null) {
             layoutModel.magnifyNodeToggle(focusedNode.id);
         }
         return true;
-    });
+    };
+    globalKeyMap.set("Cmd:m", magnifyFocused);
+    globalKeyMap.set("Cmd:Shift:m", magnifyFocused); // Ctrl+Shift+M to magnify/un-magnify block
     globalKeyMap.set("Ctrl:Shift:ArrowUp", () => {
         const disableCtrlShiftArrows = globalStore.get(getSettingsKeyAtom("app:disablectrlshiftarrows"));
         if (disableCtrlShiftArrows) {
