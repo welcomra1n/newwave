@@ -17,7 +17,12 @@ import {
     openLink,
     WOS,
 } from "@/store/global";
-import { markSessionAttention, playDoneSound } from "@/app/workspace/sessionsidebar";
+import {
+    clearSessionWorking,
+    markSessionAttention,
+    markSessionWorking,
+    playDoneSound,
+} from "@/app/workspace/sessionsidebar";
 import * as services from "@/store/services";
 import { PLATFORM, PlatformMacOS } from "@/util/platformutil";
 import { base64ToArray, fireAndForget } from "@/util/util";
@@ -520,6 +525,26 @@ export class TermWrap {
         this.terminal.textarea.addEventListener("focus", focusFn);
     }
 
+    // --- session "working" (live output) detection for the sidebar ---
+    private workingTimer: ReturnType<typeof setTimeout> | null = null;
+    private cachedResumeId: string | null | undefined = undefined;
+
+    private getResumeSessionId(): string | null {
+        if (this.cachedResumeId !== undefined) return this.cachedResumeId;
+        const cmd = globalStore.get(getBlockMetaKeyAtom(this.blockId, "cmd")) as string | undefined;
+        const m = cmd?.match(/(?:--resume|resume)\s+(\S+)/);
+        this.cachedResumeId = m ? m[1] : null;
+        return this.cachedResumeId;
+    }
+
+    private notifyWorking() {
+        const sid = this.getResumeSessionId();
+        if (!sid) return;
+        markSessionWorking(sid);
+        if (this.workingTimer) clearTimeout(this.workingTimer);
+        this.workingTimer = setTimeout(() => clearSessionWorking(sid), 1200);
+    }
+
     handleNewFileSubjectData(msg: WSFileEventData) {
         if (msg.fileop == "truncate") {
             this.terminal.clear();
@@ -527,6 +552,7 @@ export class TermWrap {
         } else if (msg.fileop == "append") {
             const decodedData = base64ToArray(msg.data64);
             if (this.loaded) {
+                this.notifyWorking();
                 this.doTerminalWrite(decodedData, null);
             } else {
                 this.heldData.push(decodedData);

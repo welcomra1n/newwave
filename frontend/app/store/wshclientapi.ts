@@ -870,6 +870,12 @@ export class RpcApiType {
         return client.wshRpcCall("setclisessionmeta", data, opts);
     }
 
+    // command "setclisessionsproject" [call]
+    SetCliSessionsProjectCommand(client: WshClient, data: CliBulkProjectReq, opts?: RpcOpts): Promise<void> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "setclisessionsproject", data, opts);
+        return client.wshRpcCall("setclisessionsproject", data, opts);
+    }
+
     // command "setconfig" [call]
     SetConfigCommand(client: WshClient, data: SettingsType, opts?: RpcOpts): Promise<void> {
         if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "setconfig", data, opts);

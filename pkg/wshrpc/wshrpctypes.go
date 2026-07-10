@@ -42,6 +42,12 @@ type CliSessionEntry struct {
 	Project   string `json:"project"`   // user-assigned project group name ("" = ungrouped)
 }
 
+// CliBulkProjectReq assigns many sessions to a folder in one atomic write.
+type CliBulkProjectReq struct {
+	SessionIds []string `json:"sessionids"`
+	Project    string   `json:"project"`
+}
+
 // CliSessionMetaReq updates user metadata for a session.
 // Nil pointer fields are left unchanged; empty-string clears.
 type CliSessionMetaReq struct {
@@ -103,6 +109,7 @@ type WshRpcInterface interface {
 	GetFullConfigCommand(ctx context.Context) (wconfig.FullConfigType, error)
 	GetCliSessionsCommand(ctx context.Context) ([]CliSessionEntry, error)
 	SetCliSessionMetaCommand(ctx context.Context, data CliSessionMetaReq) error
+	SetCliSessionsProjectCommand(ctx context.Context, data CliBulkProjectReq) error
 	DeleteCliSessionCommand(ctx context.Context, filePath string) error
 	GetCliProjectsCommand(ctx context.Context) ([]string, error)
 	SetCliProjectsCommand(ctx context.Context, data []string) error

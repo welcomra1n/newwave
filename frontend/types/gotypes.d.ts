@@ -211,6 +211,12 @@ declare global {
         secretbindingscomplete: boolean;
     };
 
+    // wshrpc.CliBulkProjectReq
+    type CliBulkProjectReq = {
+        sessionids: string[];
+        project: string;
+    };
+
     // wshrpc.CliSessionEntry
     type CliSessionEntry = {
         agent: string;

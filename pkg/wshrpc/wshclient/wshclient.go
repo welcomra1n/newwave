@@ -866,6 +866,12 @@ func SetCliSessionMetaCommand(w *wshutil.WshRpc, data wshrpc.CliSessionMetaReq, 
 	return err
 }
 
+// command "setclisessionsproject", wshserver.SetCliSessionsProjectCommand
+func SetCliSessionsProjectCommand(w *wshutil.WshRpc, data wshrpc.CliBulkProjectReq, opts *wshrpc.RpcOpts) error {
+	_, err := sendRpcRequestCallHelper[any](w, "setclisessionsproject", data, opts)
+	return err
+}
+
 // command "setconfig", wshserver.SetConfigCommand
 func SetConfigCommand(w *wshutil.WshRpc, data wshrpc.MetaSettingsType, opts *wshrpc.RpcOpts) error {
 	_, err := sendRpcRequestCallHelper[any](w, "setconfig", data, opts)

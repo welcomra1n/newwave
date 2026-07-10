@@ -146,6 +146,29 @@ func (ws *WshServer) SetCliSessionMetaCommand(ctx context.Context, data wshrpc.C
 	return writeSessionMeta(home, meta)
 }
 
+// SetCliSessionsProjectCommand assigns many sessions to a folder atomically.
+func (ws *WshServer) SetCliSessionsProjectCommand(ctx context.Context, data wshrpc.CliBulkProjectReq) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	proj := strings.TrimSpace(data.Project)
+	meta := readSessionMeta(home)
+	for _, id := range data.SessionIds {
+		if id == "" {
+			continue
+		}
+		m := meta[id]
+		m.Project = proj
+		if m.Alias == "" && !m.Pinned && m.Color == "" && m.Project == "" {
+			delete(meta, id)
+		} else {
+			meta[id] = m
+		}
+	}
+	return writeSessionMeta(home, meta)
+}
+
 // --- project list: ~/.newwave/projects.json ---
 
 func projectsPath(home string) string {

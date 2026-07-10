@@ -51,6 +51,23 @@ export function clearSessionAttention(sessionid: string) {
     globalStore.set(sessionAttentionAtom, next);
 }
 
+// Session ids whose agent is actively producing output (working right now).
+export const sessionWorkingAtom = atom<Set<string>>(new Set<string>());
+export function markSessionWorking(sessionid: string) {
+    const cur = globalStore.get(sessionWorkingAtom);
+    if (!sessionid || cur.has(sessionid)) return;
+    const next = new Set(cur);
+    next.add(sessionid);
+    globalStore.set(sessionWorkingAtom, next);
+}
+export function clearSessionWorking(sessionid: string) {
+    const cur = globalStore.get(sessionWorkingAtom);
+    if (!cur.has(sessionid)) return;
+    const next = new Set(cur);
+    next.delete(sessionid);
+    globalStore.set(sessionWorkingAtom, next);
+}
+
 // Short two-note "done" chime via Web Audio (no asset needed).
 export function playDoneSound() {
     try {
@@ -218,6 +235,7 @@ const SessionItem = memo(
         session,
         active,
         done,
+        working,
         projects,
         selected,
         selectedIds,
@@ -227,6 +245,7 @@ const SessionItem = memo(
         session: CliSessionEntry;
         active: boolean;
         done: boolean;
+        working: boolean;
         projects: string[];
         selected: boolean;
         selectedIds: string[];
@@ -303,7 +322,7 @@ const SessionItem = memo(
                 const menu: ContextMenuItem[] = [
                     { label: "이름 변경", click: startRename },
                     { label: session.pinned ? "고정 해제" : "상단 고정", click: togglePin },
-                    { label: "프로젝트로 이동", submenu: projectMenu },
+                    { label: "폴더로 이동", submenu: projectMenu },
                     { type: "separator" },
                     { label: "삭제 (휴지통)", click: doDelete },
                 ];
@@ -370,11 +389,16 @@ const SessionItem = memo(
                         {displayName}
                     </div>
                 )}
-                {done && (
-                    <span className="text-[9px] font-bold px-1 py-px rounded-sm shrink-0 bg-accent text-black leading-none">
-                        완료
+                {working ? (
+                    <i className="fa fa-solid fa-spinner fa-spin text-[10px] text-accent shrink-0" title="작업 중" />
+                ) : done ? (
+                    <span
+                        className="text-accent font-bold text-sm leading-none shrink-0 animate-pulse"
+                        title="답변 필요"
+                    >
+                        *
                     </span>
-                )}
+                ) : null}
                 <span className="text-[10px] text-muted shrink-0">{relTime(session.mtime)}</span>
             </div>
         );
@@ -389,6 +413,7 @@ const SessionSidebar = memo(() => {
     const [filter, setFilter] = useState<AgentFilter>("all");
     const activeIds = useAtomValue(activeSessionIdsAtom);
     const attention = useAtomValue(sessionAttentionAtom);
+    const working = useAtomValue(sessionWorkingAtom);
     const listVersion = useAtomValue(sessionListVersionAtom);
     const [width, setWidth] = useAtom(sessionSidebarWidthAtom);
     const [collapsed, setCollapsed] = useAtom(sessionSidebarCollapsedAtom);
@@ -509,9 +534,7 @@ const SessionSidebar = memo(() => {
         (ids: string[], project: string) => {
             if (!ids.length) return;
             fireAndForget(async () => {
-                for (const id of ids) {
-                    await assignProject(id, project);
-                }
+                await RpcApi.SetCliSessionsProjectCommand(TabRpcClient, { sessionids: ids, project });
                 setSelected(new Set());
                 load();
             });
@@ -575,6 +598,7 @@ const SessionSidebar = memo(() => {
                 session={s}
                 active={activeIds.has(s.sessionid)}
                 done={attention.has(s.sessionid)}
+                working={working.has(s.sessionid)}
                 projects={projects}
                 selected={selected.has(s.sessionid)}
                 selectedIds={selectedIds}
@@ -590,7 +614,7 @@ const SessionSidebar = memo(() => {
                 <button
                     type="button"
                     className="ml-auto text-secondary hover:text-white text-xs cursor-pointer px-1"
-                    title="새 프로젝트"
+                    title="새 폴더"
                     onClick={() => {
                         setCreating(true);
                         setNewName("");
@@ -637,7 +661,7 @@ const SessionSidebar = memo(() => {
                 <div className="px-1.5 py-1 border-b border-border">
                     <input
                         autoFocus
-                        placeholder="새 프로젝트 이름"
+                        placeholder="새 폴더 이름"
                         className="text-xs bg-black/40 text-white rounded-sm px-1.5 py-1 w-full outline-none border border-accent"
                         value={newName}
                         onChange={(e) => setNewName(e.target.value)}
@@ -657,7 +681,7 @@ const SessionSidebar = memo(() => {
                         className="text-[11px] text-accent hover:underline ml-auto cursor-pointer"
                         onClick={openProjectPickMenu}
                     >
-                        프로젝트 배정
+                        폴더 배정
                     </button>
                     <button
                         type="button"
@@ -682,19 +706,27 @@ const SessionSidebar = memo(() => {
                         if (isUng && items.length === 0) return null;
                         const groupCollapsed = collapsedGroups.has(g);
                         return (
-                            <div key={g} className="mb-1">
+                            <div
+                                key={g}
+                                className={clsx(
+                                    "mb-1 rounded-md",
+                                    dragOverGroup === g && "ring-1 ring-accent ring-inset bg-accent/10"
+                                )}
+                                onDragOver={(e) => {
+                                    e.preventDefault();
+                                    e.dataTransfer.dropEffect = "move";
+                                    setDragOverGroup(g);
+                                }}
+                                onDragLeave={(e) => {
+                                    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                                        setDragOverGroup((cur) => (cur === g ? null : cur));
+                                    }
+                                }}
+                                onDrop={(e) => onDropToGroup(e, isUng ? "" : g)}
+                            >
                                 <div
-                                    className={clsx(
-                                        "flex items-center gap-1 px-1 py-0.5 rounded-sm hover:bg-white/5 cursor-pointer",
-                                        dragOverGroup === g && "bg-accent/20 outline-dashed outline-1 outline-accent"
-                                    )}
+                                    className="flex items-center gap-1 px-1 py-0.5 rounded-sm hover:bg-white/5 cursor-pointer"
                                     onClick={() => toggleGroup(g)}
-                                    onDragOver={(e) => {
-                                        e.preventDefault();
-                                        setDragOverGroup(g);
-                                    }}
-                                    onDragLeave={() => setDragOverGroup((cur) => (cur === g ? null : cur))}
-                                    onDrop={(e) => onDropToGroup(e, isUng ? "" : g)}
                                     onContextMenu={
                                         isUng
                                             ? undefined
