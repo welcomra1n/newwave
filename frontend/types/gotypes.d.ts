@@ -219,6 +219,17 @@ declare global {
         title: string;
         mtime: number;
         filepath: string;
+        alias: string;
+        pinned: boolean;
+        color: string;
+    };
+
+    // wshrpc.CliSessionMetaReq
+    type CliSessionMetaReq = {
+        sessionid: string;
+        alias?: string;
+        pinned?: boolean;
+        color?: string;
     };
 
     // waveobj.Client
@@ -1118,6 +1129,7 @@ declare global {
         "frame:title"?: string;
         "frame:icon"?: string;
         "frame:text"?: string;
+        "frame:text:bg"?: string;
         "cmd:*"?: boolean;
         cmd?: string;
         "cmd:interactive"?: boolean;

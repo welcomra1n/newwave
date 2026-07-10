@@ -14,14 +14,17 @@ import { getBlockBadgeAtom } from "@/app/store/badge";
 import {
     createBlockSplitHorizontally,
     createBlockSplitVertically,
+    getBlockMetaKeyAtom,
     recordTEvent,
     refocusNode,
     WOS,
 } from "@/app/store/global";
 import { globalStore } from "@/app/store/jotaiStore";
 import { uxCloseBlock } from "@/app/store/keymodel";
+import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { useWaveEnv } from "@/app/waveenv/waveenv";
+import { bumpSessionList } from "@/app/workspace/sessionsidebar";
 import { IconButton } from "@/element/iconbutton";
 import { NodeModel } from "@/layout/index";
 import * as util from "@/util/util";
@@ -30,6 +33,39 @@ import * as jotai from "jotai";
 import * as React from "react";
 import { BlockEnv } from "./blockenv";
 import { BlockFrameProps } from "./blocktypes";
+
+// Which block's header title is currently being renamed inline (null = none).
+const renamingBlockAtom = jotai.atom<string | null>(null);
+
+function setBlockMeta(blockId: string, meta: MetaType) {
+    RpcApi.SetMetaCommand(TabRpcClient, { oref: WOS.makeORef("block", blockId), meta });
+}
+
+// Set the header background color on the block, and (if it is a resumed CLI
+// session) persist the color to the session so the sidebar reflects it too.
+function applyHeaderColor(blockId: string, color: string | null) {
+    setBlockMeta(blockId, { "frame:text:bg": color });
+    const cmd = globalStore.get(getBlockMetaKeyAtom(blockId, "cmd")) as string | undefined;
+    const m = cmd?.match(/(?:--resume|resume)\s+(\S+)/);
+    if (m) {
+        RpcApi.SetCliSessionMetaCommand(TabRpcClient, { sessionid: m[1], color: color ?? "" }).then(() =>
+            bumpSessionList()
+        );
+    }
+}
+
+// Strong, saturated header background colors for the "배경색" submenu.
+const bgPresets: { label: string; value: string | null }[] = [
+    { label: "없음", value: null },
+    { label: "빨강", value: "#e11d1d" },
+    { label: "주황", value: "#ff6a00" },
+    { label: "노랑", value: "#f5b400" },
+    { label: "초록", value: "#16a34a" },
+    { label: "파랑", value: "#2563eb" },
+    { label: "보라", value: "#9333ea" },
+    { label: "청록", value: "#0891b2" },
+    { label: "회색", value: "#4b5563" },
+];
 
 function handleHeaderContextMenu(
     e: React.MouseEvent<HTMLDivElement>,
@@ -60,6 +96,17 @@ function handleHeaderContextMenu(
     if (extraItems && extraItems.length > 0) menu.push({ type: "separator" }, ...extraItems);
     menu.push(
         { type: "separator" },
+        { label: "이름 변경", click: () => globalStore.set(renamingBlockAtom, blockId) },
+        {
+            label: "제목 배경색",
+            submenu: bgPresets.map((p) => ({
+                label: p.label,
+                click: () => applyHeaderColor(blockId, p.value),
+            })),
+        }
+    );
+    menu.push(
+        { type: "separator" },
         {
             label: "Close Block",
             click: () => uxCloseBlock(blockId),
@@ -79,8 +126,46 @@ const HeaderTextElems = React.memo(({ viewModel, blockId, preview, error }: Head
     const waveEnv = useWaveEnv<BlockEnv>();
     const frameTextAtom = waveEnv.getBlockMetaKeyAtom(blockId, "frame:text");
     const frameText = jotai.useAtomValue(frameTextAtom);
+    const renamingBlock = jotai.useAtomValue(renamingBlockAtom);
+    const isRenaming = renamingBlock === blockId;
     let headerTextUnion = util.useAtomValueSafe(viewModel?.viewText);
     headerTextUnion = frameText ?? headerTextUnion;
+
+    if (isRenaming) {
+        const initial =
+            typeof frameText === "string" ? frameText : typeof headerTextUnion === "string" ? headerTextUnion : "";
+        return (
+            <div className="block-frame-textelems-wrapper">
+                <input
+                    autoFocus
+                    defaultValue={initial}
+                    className="block-frame-text bg-black/50 text-white text-xs px-1 py-0.5 rounded-sm outline-none border border-accent min-w-0 flex-1"
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                            const val = (e.target as HTMLInputElement).value;
+                            setBlockMeta(blockId, { "frame:text": val });
+                            // reflect to the session sidebar if this block is a resumed CLI session
+                            const cmd = globalStore.get(waveEnv.getBlockMetaKeyAtom(blockId, "cmd")) as
+                                | string
+                                | undefined;
+                            const m = cmd?.match(/(?:--resume|resume)\s+(\S+)/);
+                            if (m) {
+                                RpcApi.SetCliSessionMetaCommand(TabRpcClient, { sessionid: m[1], alias: val }).then(
+                                    () => bumpSessionList()
+                                );
+                            }
+                            globalStore.set(renamingBlockAtom, null);
+                        } else if (e.key === "Escape") {
+                            globalStore.set(renamingBlockAtom, null);
+                        }
+                    }}
+                    onBlur={() => globalStore.set(renamingBlockAtom, null)}
+                />
+            </div>
+        );
+    }
 
     const headerTextElems: React.ReactElement[] = [];
     if (typeof headerTextUnion === "string") {
@@ -218,6 +303,7 @@ const BlockFrame_Header = ({
     const waveEnv = useWaveEnv<BlockEnv>();
     const metaView = jotai.useAtomValue(waveEnv.getBlockMetaKeyAtom(nodeModel.blockId, "view"));
     const metaFrameTitle = jotai.useAtomValue(waveEnv.getBlockMetaKeyAtom(nodeModel.blockId, "frame:title"));
+    const headerBg = jotai.useAtomValue(waveEnv.getBlockMetaKeyAtom(nodeModel.blockId, "frame:text:bg"));
     const metaFrameIcon = jotai.useAtomValue(waveEnv.getBlockMetaKeyAtom(nodeModel.blockId, "frame:icon"));
     const metaConnection = jotai.useAtomValue(waveEnv.getBlockMetaKeyAtom(nodeModel.blockId, "connection"));
     let viewName = util.useAtomValueSafe(viewModel?.viewName) ?? blockViewToName(metaView);
@@ -251,6 +337,7 @@ const BlockFrame_Header = ({
             className={cn("block-frame-default-header", useTermHeader && "!pl-[2px]")}
             data-role="block-header"
             ref={dragHandleRef}
+            style={headerBg ? { background: headerBg, color: "#fff" } : undefined}
             onContextMenu={(e) => handleHeaderContextMenu(e, nodeModel.blockId, viewModel, nodeModel, waveEnv)}
         >
             {!useTermHeader && (

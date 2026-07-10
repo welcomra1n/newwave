@@ -35,6 +35,7 @@ type MetaTSType struct {
 	FrameTitle             string `json:"frame:title,omitempty"`
 	FrameIcon              string `json:"frame:icon,omitempty"`
 	FrameText              string `json:"frame:text,omitempty"`
+	FrameTextBg            string `json:"frame:text:bg,omitempty"` // NewWave: title label background color
 
 	CmdClear            bool     `json:"cmd:*,omitempty"`
 	Cmd                 string   `json:"cmd,omitempty"`

@@ -17,7 +17,7 @@
     --color-accent-100: rgb(209, 250, 202);
     --color-accent-200: rgb(167, 243, 168);
     --color-accent-300: rgb(110, 231, 133);
-    --color-accent-400: rgb(88, 193, 66); /* main accent color */
+    --color-accent-400: #33ff33; /* main accent color (NewWave key color) */
     --color-accent-500: rgb(63, 162, 51);
     --color-accent-600: rgb(47, 133, 47);
     --color-accent-700: rgb(34, 104, 43);
@@ -30,11 +30,11 @@
     --color-hover: rgba(255, 255, 255, 0.1);
     --color-border: rgba(255, 255, 255, 0.16);
     --color-modalbg: #232323;
-    --color-accentbg: rgba(88, 193, 66, 0.5);
+    --color-accentbg: rgba(51, 255, 51, 0.5);
     --color-hoverbg: rgba(255, 255, 255, 0.2);
     --color-highlightbg: rgba(255, 255, 255, 0.2);
-    --color-accent: rgb(88, 193, 66);
-    --color-accenthover: rgb(118, 223, 96);
+    --color-accent: #33ff33;
+    --color-accenthover: #5cff5c;
 
     --font-sans: "Inter", sans-serif;
     --font-mono: "Hack", monospace;

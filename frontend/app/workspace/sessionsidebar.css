@@ -1,0 +1,34 @@
+/* Radar sweep: a soft gradient band scanning left -> right, GPU-smooth
+   (transform-based), fast, seamless loop. Marks an open/active session. */
+@keyframes session-radar {
+    from {
+        transform: translateX(-120%);
+    }
+    to {
+        transform: translateX(230%);
+    }
+}
+
+.session-active-radar {
+    position: relative;
+}
+
+/* keep the row content above the sweep overlay */
+.session-active-radar > * {
+    position: relative;
+    z-index: 1;
+}
+
+.session-active-radar::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background-image: linear-gradient(90deg, transparent 0%, var(--sweep-color) 50%, transparent 100%);
+    background-repeat: no-repeat;
+    background-size: 45% 100%;
+    transform: translateX(-120%);
+    animation: session-radar 2.4s linear infinite;
+    will-change: transform;
+    pointer-events: none;
+}

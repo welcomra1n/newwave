@@ -216,6 +216,12 @@ export class RpcApiType {
         return client.wshRpcCall("deletebuilder", data, opts);
     }
 
+    // command "deleteclisession" [call]
+    DeleteCliSessionCommand(client: WshClient, data: string, opts?: RpcOpts): Promise<void> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "deleteclisession", data, opts);
+        return client.wshRpcCall("deleteclisession", data, opts);
+    }
+
     // command "deletesubblock" [call]
     DeleteSubBlockCommand(client: WshClient, data: CommandDeleteBlockData, opts?: RpcOpts): Promise<void> {
         if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "deletesubblock", data, opts);
@@ -844,6 +850,12 @@ export class RpcApiType {
     SetBlockFocusCommand(client: WshClient, data: string, opts?: RpcOpts): Promise<void> {
         if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "setblockfocus", data, opts);
         return client.wshRpcCall("setblockfocus", data, opts);
+    }
+
+    // command "setclisessionmeta" [call]
+    SetCliSessionMetaCommand(client: WshClient, data: CliSessionMetaReq, opts?: RpcOpts): Promise<void> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "setclisessionmeta", data, opts);
+        return client.wshRpcCall("setclisessionmeta", data, opts);
     }
 
     // command "setconfig" [call]

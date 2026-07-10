@@ -47,6 +47,8 @@ func (ws *WshServer) GetCliSessionsCommand(ctx context.Context) ([]wshrpc.CliSes
 		candidates = candidates[:cliSessionsMaxResults]
 	}
 
+	meta := readSessionMeta(home)
+
 	entries := make([]wshrpc.CliSessionEntry, 0, len(candidates))
 	for _, c := range candidates {
 		var entry wshrpc.CliSessionEntry
@@ -56,11 +58,119 @@ func (ws *WshServer) GetCliSessionsCommand(ctx context.Context) ([]wshrpc.CliSes
 		} else {
 			entry, ok = parseCodexSession(c)
 		}
-		if ok {
-			entries = append(entries, entry)
+		if !ok {
+			continue
 		}
+		if m, found := meta[entry.SessionId]; found {
+			entry.Alias = m.Alias
+			entry.Pinned = m.Pinned
+			entry.Color = m.Color
+		}
+		entries = append(entries, entry)
 	}
+
+	// pinned first, then by recency
+	sort.SliceStable(entries, func(i, j int) bool {
+		if entries[i].Pinned != entries[j].Pinned {
+			return entries[i].Pinned
+		}
+		return entries[i].Mtime > entries[j].Mtime
+	})
 	return entries, nil
+}
+
+// --- user metadata (alias/pin) store: ~/.newwave/sessions-meta.json ---
+
+type sessionMeta struct {
+	Alias  string `json:"alias,omitempty"`
+	Pinned bool   `json:"pinned,omitempty"`
+	Color  string `json:"color,omitempty"`
+}
+
+func sessionMetaPath(home string) string {
+	return filepath.Join(home, ".newwave", "sessions-meta.json")
+}
+
+func readSessionMeta(home string) map[string]sessionMeta {
+	out := make(map[string]sessionMeta)
+	data, err := os.ReadFile(sessionMetaPath(home))
+	if err != nil {
+		return out
+	}
+	_ = json.Unmarshal(data, &out) // corrupt file -> empty map, non-fatal
+	return out
+}
+
+func writeSessionMeta(home string, meta map[string]sessionMeta) error {
+	dir := filepath.Join(home, ".newwave")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(meta, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(sessionMetaPath(home), data, 0o644)
+}
+
+// SetCliSessionMetaCommand sets alias/pinned for a session (nil fields unchanged).
+func (ws *WshServer) SetCliSessionMetaCommand(ctx context.Context, data wshrpc.CliSessionMetaReq) error {
+	if data.SessionId == "" {
+		return nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	meta := readSessionMeta(home)
+	m := meta[data.SessionId]
+	if data.Alias != nil {
+		m.Alias = strings.TrimSpace(*data.Alias)
+	}
+	if data.Pinned != nil {
+		m.Pinned = *data.Pinned
+	}
+	if data.Color != nil {
+		m.Color = strings.TrimSpace(*data.Color)
+	}
+	if m.Alias == "" && !m.Pinned && m.Color == "" {
+		delete(meta, data.SessionId) // no metadata left -> drop entry
+	} else {
+		meta[data.SessionId] = m
+	}
+	return writeSessionMeta(home, meta)
+}
+
+// DeleteCliSessionCommand moves a session's jsonl to a trash dir (recoverable,
+// not a hard delete) so the sidebar drops it without destroying history.
+func (ws *WshServer) DeleteCliSessionCommand(ctx context.Context, filePath string) error {
+	if filePath == "" {
+		return nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	// guard: only allow deleting under the known session roots
+	claudeRoot := filepath.Join(home, ".claude", "projects")
+	codexRoot := filepath.Join(home, ".codex", "sessions")
+	abs, err := filepath.Abs(filePath)
+	if err != nil {
+		return err
+	}
+	if !strings.HasPrefix(abs, claudeRoot) && !strings.HasPrefix(abs, codexRoot) {
+		return os.ErrPermission
+	}
+	trashDir := filepath.Join(home, ".newwave", "trash")
+	if err := os.MkdirAll(trashDir, 0o755); err != nil {
+		return err
+	}
+	dest := filepath.Join(trashDir, filepath.Base(abs))
+	// avoid clobbering an existing trashed file with same name
+	if _, statErr := os.Stat(dest); statErr == nil {
+		dest = filepath.Join(trashDir, filepath.Base(filepath.Dir(abs))+"_"+filepath.Base(abs))
+	}
+	return os.Rename(abs, dest)
 }
 
 func collectClaudeCandidates(home string) []cliSessionCandidate {
@@ -126,6 +236,7 @@ func parseClaudeSession(c cliSessionCandidate) (wshrpc.CliSessionEntry, bool) {
 
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	var bestTitle, fallbackTitle string
 	for i := 0; i < cliSessionsScanLines && sc.Scan(); i++ {
 		var ln claudeLine
 		if json.Unmarshal(sc.Bytes(), &ln) != nil {
@@ -134,20 +245,27 @@ func parseClaudeSession(c cliSessionCandidate) (wshrpc.CliSessionEntry, bool) {
 		if entry.Cwd == "" && ln.Cwd != "" {
 			entry.Cwd = ln.Cwd
 		}
-		if entry.Title == "" && ln.Type == "user" && len(ln.Message) > 0 {
+		if bestTitle == "" && ln.Type == "user" && len(ln.Message) > 0 {
 			var msg claudeMessage
 			if json.Unmarshal(ln.Message, &msg) == nil {
-				entry.Title = cleanTitle(extractContentText(msg.Content))
+				pickTitle(cleanTitle(extractContentText(msg.Content)), &bestTitle, &fallbackTitle)
 			}
 		}
-		if entry.Cwd != "" && entry.Title != "" {
+		if entry.Cwd != "" && bestTitle != "" {
 			break
 		}
 	}
-	if entry.Title == "" {
-		entry.Title = "(제목 없음)"
-	}
+	entry.Title = firstNonEmpty(bestTitle, fallbackTitle, "(제목 없음)")
 	return entry, true
+}
+
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // --- Codex parsing ---
@@ -183,6 +301,7 @@ func parseCodexSession(c cliSessionCandidate) (wshrpc.CliSessionEntry, bool) {
 
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	var bestTitle, fallbackTitle string
 	for i := 0; i < cliSessionsScanLines && sc.Scan(); i++ {
 		b := sc.Bytes()
 		if entry.SessionId == "" {
@@ -193,13 +312,13 @@ func parseCodexSession(c cliSessionCandidate) (wshrpc.CliSessionEntry, bool) {
 				continue
 			}
 		}
-		if entry.Title == "" {
+		if bestTitle == "" {
 			var item codexItemLine
 			if json.Unmarshal(b, &item) == nil && item.Payload.Role == "user" && len(item.Payload.Content) > 0 {
-				entry.Title = cleanTitle(extractContentText(item.Payload.Content))
+				pickTitle(cleanTitle(extractContentText(item.Payload.Content)), &bestTitle, &fallbackTitle)
 			}
 		}
-		if entry.SessionId != "" && entry.Title != "" {
+		if entry.SessionId != "" && bestTitle != "" {
 			break
 		}
 	}
@@ -207,9 +326,7 @@ func parseCodexSession(c cliSessionCandidate) (wshrpc.CliSessionEntry, bool) {
 		// no valid meta header -> not resumable, drop
 		return entry, false
 	}
-	if entry.Title == "" {
-		entry.Title = "(제목 없음)"
-	}
+	entry.Title = firstNonEmpty(bestTitle, fallbackTitle, "(제목 없음)")
 	return entry, true
 }
 
@@ -237,6 +354,47 @@ func extractContentText(raw json.RawMessage) string {
 		}
 	}
 	return ""
+}
+
+// isNoiseTitle reports whether a candidate title is boilerplate/noise rather
+// than a real user description (system reminders, image pastes, command
+// wrappers, slash commands, agent preambles, continuation banners).
+func isNoiseTitle(s string) bool {
+	t := strings.TrimSpace(s)
+	if t == "" {
+		return true
+	}
+	noisePrefixes := []string{
+		"<system-reminder", "<command-", "<local-command", "[Image",
+		"# AGENTS.md", "Caveat:", "This session is being continued",
+		"<user-prompt-submit-hook", "<persisted-",
+	}
+	for _, p := range noisePrefixes {
+		if strings.HasPrefix(t, p) {
+			return true
+		}
+	}
+	// bare slash command, e.g. "/resume", "/clear"
+	if strings.HasPrefix(t, "/") && !strings.ContainsAny(t, " \t") && len(t) < 24 {
+		return true
+	}
+	return false
+}
+
+// pickTitle updates best/fallback trackers with a new candidate. Returns true
+// once a non-noise title has been chosen (caller can stop scanning).
+func pickTitle(candidate string, best *string, fallback *string) bool {
+	if candidate == "" {
+		return false
+	}
+	if *fallback == "" {
+		*fallback = candidate
+	}
+	if *best == "" && !isNoiseTitle(candidate) {
+		*best = candidate
+		return true
+	}
+	return *best != ""
 }
 
 func cleanTitle(s string) string {
