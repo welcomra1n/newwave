@@ -166,6 +166,44 @@ export async function extractClipboardData(item: ClipboardItem): Promise<GenClip
 }
 
 /**
+ * Shows a floating thumbnail of a just-pasted image for ~2s, then auto-fades.
+ * Self-contained DOM (no React) so it can be called from the xterm wrapper.
+ */
+export function showPastedImagePreview(blob: Blob): void {
+    try {
+        const url = URL.createObjectURL(blob);
+        const el = document.createElement("div");
+        el.style.cssText =
+            "position:fixed;bottom:22px;right:22px;z-index:99999;background:#1c1c1c;border:1px solid rgba(255,255,255,0.15);border-radius:10px;padding:8px;box-shadow:0 10px 34px rgba(0,0,0,0.55);opacity:0;transform:translateY(10px) scale(0.98);transition:opacity .25s ease,transform .25s ease;pointer-events:none;";
+        const img = document.createElement("img");
+        img.src = url;
+        img.style.cssText = "display:block;max-width:224px;max-height:224px;border-radius:6px;object-fit:contain;";
+        el.appendChild(img);
+        const label = document.createElement("div");
+        const kb = blob.size / 1024;
+        const sizeStr = kb >= 1024 ? `${(kb / 1024).toFixed(1)}MB` : `${Math.round(kb)}KB`;
+        label.textContent = `이미지 붙여넣음 · ${sizeStr}`;
+        label.style.cssText = "margin-top:6px;font-size:11px;color:#33ff33;text-align:center;";
+        el.appendChild(label);
+        document.body.appendChild(el);
+        requestAnimationFrame(() => {
+            el.style.opacity = "1";
+            el.style.transform = "translateY(0) scale(1)";
+        });
+        setTimeout(() => {
+            el.style.opacity = "0";
+            el.style.transform = "translateY(10px) scale(0.98)";
+            setTimeout(() => {
+                el.remove();
+                URL.revokeObjectURL(url);
+            }, 300);
+        }, 2000);
+    } catch {
+        // preview is best-effort; never break paste
+    }
+}
+
+/**
  * Finds the first DataTransferItem matching the specified kind and type predicate.
  *
  * @param items - The DataTransferItemList to search

@@ -9,6 +9,7 @@ import { TabRpcClient } from "@/app/store/wshrpcutil";
 import {
     fetchWaveFile,
     getApi,
+    getBlockMetaKeyAtom,
     getOverrideConfigAtom,
     getSettingsKeyAtom,
     globalStore,
@@ -16,6 +17,7 @@ import {
     openLink,
     WOS,
 } from "@/store/global";
+import { markSessionAttention, playDoneSound } from "@/app/workspace/sessionsidebar";
 import * as services from "@/store/services";
 import { PLATFORM, PlatformMacOS } from "@/util/platformutil";
 import { base64ToArray, fireAndForget } from "@/util/util";
@@ -42,6 +44,7 @@ import {
     extractAllClipboardData,
     normalizeCursorStyle,
     quoteForPosixShell,
+    showPastedImagePreview,
     trimTerminalSelection,
 } from "./termutil";
 
@@ -146,6 +149,20 @@ export class TermWrap {
         this.claudeCodeActiveAtom = jotai.atom(false);
         this.webglEnabledAtom = jotai.atom(false) as jotai.PrimitiveAtom<boolean>;
         this.terminal = new Terminal(options);
+        // terminal bell = agent turn finished / wants attention: mark the
+        // session in the sidebar and play a done chime (session blocks only)
+        this.terminal.onBell(() => {
+            try {
+                const cmd = globalStore.get(getBlockMetaKeyAtom(this.blockId, "cmd")) as string | undefined;
+                const m = cmd?.match(/(?:--resume|resume)\s+(\S+)/);
+                if (m) {
+                    markSessionAttention(m[1]);
+                    playDoneSound();
+                }
+            } catch {
+                // best-effort
+            }
+        });
         this.fitAddon = new FitAddon();
         this.serializeAddon = new SerializeAddon();
         this.searchAddon = new SearchAddon();
@@ -646,11 +663,14 @@ export class TermWrap {
             let firstImage = true;
             for (const data of clipboardData) {
                 if (data.image && SupportsImageInput) {
+                    showPastedImagePreview(data.image);
                     if (!firstImage) {
                         await new Promise((r) => setTimeout(r, 150));
                     }
                     const tempPath = await createTempFileFromBlob(data.image);
-                    this.terminal.paste(tempPath + " ");
+                    // forward slashes so Claude Code recognizes it as an image
+                    // path (shows [Image #N]) instead of echoing a raw win path
+                    this.terminal.paste(tempPath.replace(/\\/g, "/") + " ");
                     firstImage = false;
                 }
                 if (data.text) {

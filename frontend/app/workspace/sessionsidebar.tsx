@@ -8,24 +8,73 @@
 
 import { ContextMenuModel } from "@/app/store/contextmenu";
 import { globalStore } from "@/app/store/jotaiStore";
+import { uxCloseBlock } from "@/app/store/keymodel";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { getLayoutModelForStaticTab } from "@/layout/index";
 import { atoms, createBlock, getBlockMetaKeyAtom, refocusNode, WOS } from "@/store/global";
 import { fireAndForget } from "@/util/util";
 import clsx from "clsx";
-import { atom, useAtomValue } from "jotai";
+import { atom, useAtom, useAtomValue } from "jotai";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import "./sessionsidebar.css";
 
 // persisted-ish toggle (module-level; resets on full reload, fine for v1)
 export const sessionSidebarVisibleAtom = atom(true);
+export const sessionSidebarWidthAtom = atom(240);
+export const sessionSidebarCollapsedAtom = atom(false);
+
+const SIDEBAR_MIN_W = 170;
+const SIDEBAR_MAX_W = 460;
 
 // Bump to make the sidebar reload its session list (e.g. after a rename made
 // from the block header). Cross-component refresh signal.
 export const sessionListVersionAtom = atom(0);
 export function bumpSessionList() {
     globalStore.set(sessionListVersionAtom, (v) => v + 1);
+}
+
+// Session ids whose agent finished a turn (terminal bell) and want attention.
+export const sessionAttentionAtom = atom<Set<string>>(new Set<string>());
+export function markSessionAttention(sessionid: string) {
+    const cur = globalStore.get(sessionAttentionAtom);
+    if (!sessionid || cur.has(sessionid)) return;
+    const next = new Set(cur);
+    next.add(sessionid);
+    globalStore.set(sessionAttentionAtom, next);
+}
+export function clearSessionAttention(sessionid: string) {
+    const cur = globalStore.get(sessionAttentionAtom);
+    if (!cur.has(sessionid)) return;
+    const next = new Set(cur);
+    next.delete(sessionid);
+    globalStore.set(sessionAttentionAtom, next);
+}
+
+// Short two-note "done" chime via Web Audio (no asset needed).
+export function playDoneSound() {
+    try {
+        const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        const ctx = new Ctx();
+        const play = (freq: number, start: number, dur: number) => {
+            const o = ctx.createOscillator();
+            const g = ctx.createGain();
+            o.connect(g);
+            g.connect(ctx.destination);
+            o.type = "sine";
+            o.frequency.value = freq;
+            g.gain.setValueAtTime(0.0001, ctx.currentTime + start);
+            g.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + start + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + start + dur);
+            o.start(ctx.currentTime + start);
+            o.stop(ctx.currentTime + start + dur + 0.02);
+        };
+        play(784, 0, 0.15); // G5
+        play(1047, 0.13, 0.22); // C6
+        setTimeout(() => ctx.close(), 600);
+    } catch {
+        // audio best-effort
+    }
 }
 
 type AgentFilter = "all" | "claude" | "codex";
@@ -92,6 +141,7 @@ function findOpenBlockId(sessionid: string): string | null {
 }
 
 function openSession(s: CliSessionEntry) {
+    clearSessionAttention(s.sessionid); // opening = acknowledged
     // already open -> just focus it, don't spawn a duplicate block
     const existing = findOpenBlockId(s.sessionid);
     if (existing) {
@@ -153,8 +203,36 @@ async function deleteSession(filepath: string) {
     await RpcApi.DeleteCliSessionCommand(TabRpcClient, filepath);
 }
 
+async function assignProject(sessionid: string, project: string) {
+    await RpcApi.SetCliSessionMetaCommand(TabRpcClient, { sessionid, project });
+}
+
+async function saveProjects(list: string[]) {
+    await RpcApi.SetCliProjectsCommand(TabRpcClient, list);
+}
+
+const UNGROUPED = "__ungrouped__";
+
 const SessionItem = memo(
-    ({ session, active, onChanged }: { session: CliSessionEntry; active: boolean; onChanged: () => void }) => {
+    ({
+        session,
+        active,
+        done,
+        projects,
+        selected,
+        selectedIds,
+        onToggleSelect,
+        onChanged,
+    }: {
+        session: CliSessionEntry;
+        active: boolean;
+        done: boolean;
+        projects: string[];
+        selected: boolean;
+        selectedIds: string[];
+        onToggleSelect: (sessionid: string) => void;
+        onChanged: () => void;
+    }) => {
         const [editing, setEditing] = useState(false);
         const [draft, setDraft] = useState("");
         const inputRef = useRef<HTMLInputElement>(null);
@@ -193,37 +271,77 @@ const SessionItem = memo(
 
         const doDelete = useCallback(() => {
             fireAndForget(async () => {
+                // close the open block for this session (if any), then remove the file
+                const blockId = findOpenBlockId(session.sessionid);
                 await deleteSession(session.filepath);
+                if (blockId) uxCloseBlock(blockId);
                 onChanged();
             });
-        }, [session.filepath, onChanged]);
+        }, [session.filepath, session.sessionid, onChanged]);
+
+        const setProject = useCallback(
+            (p: string) => {
+                fireAndForget(async () => {
+                    await assignProject(session.sessionid, p);
+                    onChanged();
+                });
+            },
+            [session.sessionid, onChanged]
+        );
 
         const onContextMenu = useCallback(
             (e: React.MouseEvent) => {
                 e.preventDefault();
+                const projectMenu: ContextMenuItem[] = [
+                    { label: (session.project ? "" : "✓ ") + "미분류", click: () => setProject("") },
+                    ...(projects.length ? [{ type: "separator" as const }] : []),
+                    ...projects.map((p) => ({
+                        label: (session.project === p ? "✓ " : "") + p,
+                        click: () => setProject(p),
+                    })),
+                ];
                 const menu: ContextMenuItem[] = [
                     { label: "이름 변경", click: startRename },
                     { label: session.pinned ? "고정 해제" : "상단 고정", click: togglePin },
+                    { label: "프로젝트로 이동", submenu: projectMenu },
                     { type: "separator" },
                     { label: "삭제 (휴지통)", click: doDelete },
                 ];
                 ContextMenuModel.getInstance().showContextMenu(menu, e);
             },
-            [session.pinned, startRename, togglePin, doDelete]
+            [session.pinned, session.project, projects, startRename, togglePin, doDelete, setProject]
         );
 
         return (
             <div
+                draggable={!editing}
+                onDragStart={(e) => {
+                    const ids = selected && selectedIds.length ? selectedIds : [session.sessionid];
+                    e.dataTransfer.setData("application/x-session-ids", JSON.stringify(ids));
+                    e.dataTransfer.effectAllowed = "move";
+                }}
                 className={clsx(
-                    "flex items-center gap-1.5 px-2 py-1.5 rounded-md cursor-pointer group overflow-hidden border border-white/10 bg-white/[0.035] hover:bg-white/[0.08] hover:border-white/20",
-                    active && "session-active-radar"
+                    "flex items-center gap-1.5 px-2 py-1.5 rounded-md cursor-pointer group overflow-hidden bg-white/[0.035] hover:bg-white/[0.08]",
+                    active ? "border-2 session-active-radar" : "border border-white/10 hover:border-white/20",
+                    selected && "ring-2 ring-accent ring-inset"
                 )}
                 style={
-                    {
-                        "--sweep-color": `color-mix(in srgb, ${session.color || "var(--color-accent)"} 34%, transparent)`,
-                    } as React.CSSProperties
+                    active
+                        ? ({
+                              borderColor: session.color || "var(--color-accent)",
+                              boxShadow: `0 0 7px -1px ${session.color || "var(--color-accent)"}`,
+                              "--sweep-color": `color-mix(in srgb, ${session.color || "var(--color-accent)"} 32%, transparent)`,
+                          } as React.CSSProperties)
+                        : undefined
                 }
-                onClick={() => !editing && openSession(session)}
+                onClick={(e) => {
+                    if (editing) return;
+                    if (e.ctrlKey || e.metaKey) {
+                        onToggleSelect(session.sessionid);
+                        return;
+                    }
+                    openSession(session);
+                }}
                 onContextMenu={onContextMenu}
                 title={`${session.cwd}\n${session.sessionid}${active ? "\n(열림)" : ""}`}
             >
@@ -252,6 +370,11 @@ const SessionItem = memo(
                         {displayName}
                     </div>
                 )}
+                {done && (
+                    <span className="text-[9px] font-bold px-1 py-px rounded-sm shrink-0 bg-accent text-black leading-none">
+                        완료
+                    </span>
+                )}
                 <span className="text-[10px] text-muted shrink-0">{relTime(session.mtime)}</span>
             </div>
         );
@@ -261,17 +384,42 @@ SessionItem.displayName = "SessionItem";
 
 const SessionSidebar = memo(() => {
     const [sessions, setSessions] = useState<CliSessionEntry[]>([]);
+    const [projects, setProjects] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<AgentFilter>("all");
     const activeIds = useAtomValue(activeSessionIdsAtom);
+    const attention = useAtomValue(sessionAttentionAtom);
     const listVersion = useAtomValue(sessionListVersionAtom);
+    const [width, setWidth] = useAtom(sessionSidebarWidthAtom);
+    const [collapsed, setCollapsed] = useAtom(sessionSidebarCollapsedAtom);
+    const [hovering, setHovering] = useState(false);
+    const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+    const [creating, setCreating] = useState(false);
+    const [newName, setNewName] = useState("");
+    const [editingProject, setEditingProject] = useState<string | null>(null);
+    const [editDraft, setEditDraft] = useState("");
+    const [selected, setSelected] = useState<Set<string>>(new Set());
+    const [dragOverGroup, setDragOverGroup] = useState<string | null>(null);
+
+    const toggleSelect = useCallback((sessionid: string) => {
+        setSelected((prev) => {
+            const next = new Set(prev);
+            if (next.has(sessionid)) next.delete(sessionid);
+            else next.add(sessionid);
+            return next;
+        });
+    }, []);
 
     const load = useCallback(() => {
         setLoading(true);
         fireAndForget(async () => {
             try {
-                const list = await RpcApi.GetCliSessionsCommand(TabRpcClient);
+                const [list, projs] = await Promise.all([
+                    RpcApi.GetCliSessionsCommand(TabRpcClient),
+                    RpcApi.GetCliProjectsCommand(TabRpcClient),
+                ]);
                 setSessions(list ?? []);
+                setProjects(projs ?? []);
             } catch (e) {
                 console.error("GetCliSessions failed", e);
                 setSessions([]);
@@ -285,19 +433,189 @@ const SessionSidebar = memo(() => {
         load();
     }, [load, listVersion]);
 
-    const shown = sessions.filter((s) => filter === "all" || s.agent === filter);
+    const startResize = useCallback(
+        (e: React.MouseEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const startX = e.clientX;
+            const startW = width;
+            const onMove = (ev: MouseEvent) => {
+                const w = Math.min(SIDEBAR_MAX_W, Math.max(SIDEBAR_MIN_W, startW + (ev.clientX - startX)));
+                setWidth(w);
+            };
+            const onUp = () => {
+                window.removeEventListener("mousemove", onMove);
+                window.removeEventListener("mouseup", onUp);
+            };
+            window.addEventListener("mousemove", onMove);
+            window.addEventListener("mouseup", onUp);
+        },
+        [width, setWidth]
+    );
 
-    return (
-        <div className="flex flex-col w-[240px] shrink-0 h-full border-r border-border bg-modalbg select-none overflow-hidden">
+    const createProject = useCallback(
+        (name: string) => {
+            setCreating(false);
+            setNewName("");
+            const n = name.trim();
+            if (!n || projects.includes(n)) return;
+            fireAndForget(async () => {
+                await saveProjects([...projects, n]);
+                load();
+            });
+        },
+        [projects, load]
+    );
+
+    const renameProject = useCallback(
+        (oldName: string, name: string) => {
+            setEditingProject(null);
+            const n = name.trim();
+            if (!n || n === oldName || projects.includes(n)) return;
+            fireAndForget(async () => {
+                for (const s of sessions.filter((s) => s.project === oldName)) {
+                    await assignProject(s.sessionid, n);
+                }
+                await saveProjects(projects.map((p) => (p === oldName ? n : p)));
+                load();
+            });
+        },
+        [projects, sessions, load]
+    );
+
+    const deleteProject = useCallback(
+        (name: string) => {
+            fireAndForget(async () => {
+                for (const s of sessions.filter((s) => s.project === name)) {
+                    await assignProject(s.sessionid, "");
+                }
+                await saveProjects(projects.filter((p) => p !== name));
+                load();
+            });
+        },
+        [projects, sessions, load]
+    );
+
+    const toggleGroup = useCallback((name: string) => {
+        setCollapsedGroups((prev) => {
+            const next = new Set(prev);
+            if (next.has(name)) next.delete(name);
+            else next.add(name);
+            return next;
+        });
+    }, []);
+
+    const assignManyToProject = useCallback(
+        (ids: string[], project: string) => {
+            if (!ids.length) return;
+            fireAndForget(async () => {
+                for (const id of ids) {
+                    await assignProject(id, project);
+                }
+                setSelected(new Set());
+                load();
+            });
+        },
+        [load]
+    );
+
+    // project = "" for the ungrouped group
+    const onDropToGroup = useCallback(
+        (e: React.DragEvent, project: string) => {
+            e.preventDefault();
+            setDragOverGroup(null);
+            const raw = e.dataTransfer.getData("application/x-session-ids");
+            if (!raw) return;
+            try {
+                const ids = JSON.parse(raw) as string[];
+                assignManyToProject(ids, project);
+            } catch {
+                // ignore malformed payload
+            }
+        },
+        [assignManyToProject]
+    );
+
+    const openProjectPickMenu = useCallback(
+        (e: React.MouseEvent) => {
+            e.preventDefault();
+            const ids = Array.from(selected);
+            const menu: ContextMenuItem[] = [
+                { label: "미분류", click: () => assignManyToProject(ids, "") },
+                ...(projects.length ? [{ type: "separator" as const }] : []),
+                ...projects.map((p) => ({ label: p, click: () => assignManyToProject(ids, p) })),
+            ];
+            ContextMenuModel.getInstance().showContextMenu(menu, e);
+        },
+        [selected, projects, assignManyToProject]
+    );
+
+    const shown = sessions.filter((s) => filter === "all" || s.agent === filter);
+    const showPanel = !collapsed || hovering;
+    const counts: Record<AgentFilter, number> = {
+        all: sessions.length,
+        claude: sessions.filter((s) => s.agent === "claude").length,
+        codex: sessions.filter((s) => s.agent === "codex").length,
+    };
+
+    // group sessions by project (ordered) + ungrouped
+    const projectSet = new Set(projects);
+    const grouped: Record<string, CliSessionEntry[]> = {};
+    for (const s of shown) {
+        const g = s.project && projectSet.has(s.project) ? s.project : UNGROUPED;
+        (grouped[g] ||= []).push(s);
+    }
+    const groupOrder = [...projects, UNGROUPED];
+
+    const selectedIds = Array.from(selected);
+    const renderItems = (items: CliSessionEntry[]) =>
+        items.map((s) => (
+            <SessionItem
+                key={`${s.agent}:${s.filepath}`}
+                session={s}
+                active={activeIds.has(s.sessionid)}
+                done={attention.has(s.sessionid)}
+                projects={projects}
+                selected={selected.has(s.sessionid)}
+                selectedIds={selectedIds}
+                onToggleSelect={toggleSelect}
+                onChanged={load}
+            />
+        ));
+
+    const panel = (
+        <div className="flex flex-col h-full bg-modalbg overflow-hidden">
             <div className="flex items-center gap-1 px-2 py-1.5 border-b border-border">
                 <span className="text-xs font-semibold text-white/80">세션</span>
                 <button
                     type="button"
                     className="ml-auto text-secondary hover:text-white text-xs cursor-pointer px-1"
+                    title="새 프로젝트"
+                    onClick={() => {
+                        setCreating(true);
+                        setNewName("");
+                    }}
+                >
+                    <i className="fa fa-solid fa-folder-plus" />
+                </button>
+                <button
+                    type="button"
+                    className="text-secondary hover:text-white text-xs cursor-pointer px-1"
                     title="새로고침"
                     onClick={load}
                 >
                     <i className="fa fa-solid fa-rotate-right" />
+                </button>
+                <button
+                    type="button"
+                    className="text-secondary hover:text-white text-xs cursor-pointer px-1"
+                    title={collapsed ? "고정 펼치기" : "접기"}
+                    onClick={() => {
+                        setCollapsed(!collapsed);
+                        setHovering(false);
+                    }}
+                >
+                    <i className={clsx("fa fa-solid", collapsed ? "fa-angles-right" : "fa-angles-left")} />
                 </button>
             </div>
             <div className="flex gap-0.5 px-1.5 py-1 border-b border-border">
@@ -311,28 +629,156 @@ const SessionSidebar = memo(() => {
                         )}
                         onClick={() => setFilter(f)}
                     >
-                        {f === "all" ? "전체" : f}
+                        {f === "all" ? "전체" : f} <span className="opacity-60">{counts[f]}</span>
                     </button>
                 ))}
             </div>
-            <div className="flex-grow overflow-y-auto overflow-x-hidden px-1.5 py-1.5 space-y-1">
+            {creating && (
+                <div className="px-1.5 py-1 border-b border-border">
+                    <input
+                        autoFocus
+                        placeholder="새 프로젝트 이름"
+                        className="text-xs bg-black/40 text-white rounded-sm px-1.5 py-1 w-full outline-none border border-accent"
+                        value={newName}
+                        onChange={(e) => setNewName(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter") createProject(newName);
+                            else if (e.key === "Escape") setCreating(false);
+                        }}
+                        onBlur={() => createProject(newName)}
+                    />
+                </div>
+            )}
+            {selected.size > 0 && (
+                <div className="flex items-center gap-2 px-2 py-1 border-b border-border bg-accent/10">
+                    <span className="text-[11px] text-white">{selected.size}개 선택</span>
+                    <button
+                        type="button"
+                        className="text-[11px] text-accent hover:underline ml-auto cursor-pointer"
+                        onClick={openProjectPickMenu}
+                    >
+                        프로젝트 배정
+                    </button>
+                    <button
+                        type="button"
+                        className="text-[11px] text-secondary hover:text-white cursor-pointer"
+                        onClick={() => setSelected(new Set())}
+                    >
+                        해제
+                    </button>
+                </div>
+            )}
+            <div className="flex-grow overflow-y-auto overflow-x-hidden px-1.5 py-1.5">
                 {loading ? (
                     <div className="flex justify-center py-4 text-muted">
                         <i className="fa fa-solid fa-spinner fa-spin" />
                     </div>
-                ) : shown.length === 0 ? (
+                ) : shown.length === 0 && projects.length === 0 ? (
                     <div className="text-xs text-muted text-center py-4 px-2">세션 없음</div>
                 ) : (
-                    shown.map((s) => (
-                        <SessionItem
-                            key={`${s.agent}:${s.filepath}`}
-                            session={s}
-                            active={activeIds.has(s.sessionid)}
-                            onChanged={load}
-                        />
-                    ))
+                    groupOrder.map((g) => {
+                        const items = grouped[g] || [];
+                        const isUng = g === UNGROUPED;
+                        if (isUng && items.length === 0) return null;
+                        const groupCollapsed = collapsedGroups.has(g);
+                        return (
+                            <div key={g} className="mb-1">
+                                <div
+                                    className={clsx(
+                                        "flex items-center gap-1 px-1 py-0.5 rounded-sm hover:bg-white/5 cursor-pointer",
+                                        dragOverGroup === g && "bg-accent/20 outline-dashed outline-1 outline-accent"
+                                    )}
+                                    onClick={() => toggleGroup(g)}
+                                    onDragOver={(e) => {
+                                        e.preventDefault();
+                                        setDragOverGroup(g);
+                                    }}
+                                    onDragLeave={() => setDragOverGroup((cur) => (cur === g ? null : cur))}
+                                    onDrop={(e) => onDropToGroup(e, isUng ? "" : g)}
+                                    onContextMenu={
+                                        isUng
+                                            ? undefined
+                                            : (e) => {
+                                                  e.preventDefault();
+                                                  e.stopPropagation();
+                                                  ContextMenuModel.getInstance().showContextMenu(
+                                                      [
+                                                          {
+                                                              label: "이름 변경",
+                                                              click: () => {
+                                                                  setEditDraft(g);
+                                                                  setEditingProject(g);
+                                                              },
+                                                          },
+                                                          { label: "삭제", click: () => deleteProject(g) },
+                                                      ],
+                                                      e
+                                                  );
+                                              }
+                                    }
+                                >
+                                    <i
+                                        className={clsx(
+                                            "fa fa-solid text-[9px] text-secondary w-2",
+                                            groupCollapsed ? "fa-chevron-right" : "fa-chevron-down"
+                                        )}
+                                    />
+                                    {!isUng && <i className="fa fa-solid fa-folder text-[10px] text-accent shrink-0" />}
+                                    {editingProject === g ? (
+                                        <input
+                                            autoFocus
+                                            className="text-[11px] bg-black/40 text-white rounded-sm px-1 py-0.5 flex-1 min-w-0 outline-none border border-accent"
+                                            value={editDraft}
+                                            onClick={(e) => e.stopPropagation()}
+                                            onChange={(e) => setEditDraft(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter") renameProject(g, editDraft);
+                                                else if (e.key === "Escape") setEditingProject(null);
+                                            }}
+                                            onBlur={() => renameProject(g, editDraft)}
+                                        />
+                                    ) : (
+                                        <span className="text-[11px] font-semibold text-white/70 truncate">
+                                            {isUng ? "미분류" : g}
+                                        </span>
+                                    )}
+                                    <span className="text-[10px] text-muted ml-auto shrink-0">{items.length}</span>
+                                </div>
+                                {!groupCollapsed && <div className="space-y-1 mt-0.5">{renderItems(items)}</div>}
+                            </div>
+                        );
+                    })
                 )}
             </div>
+        </div>
+    );
+
+    return (
+        <div
+            className="relative h-full shrink-0 select-none"
+            style={{ width: showPanel ? width : 6 }}
+            onMouseLeave={() => setHovering(false)}
+        >
+            {collapsed && !hovering ? (
+                <div
+                    className="h-full w-1.5 bg-modalbg border-r border-border hover:bg-accent/40 cursor-pointer transition-colors"
+                    title="세션 — 마우스를 올리면 펼쳐집니다"
+                    onMouseEnter={() => setHovering(true)}
+                />
+            ) : (
+                <div
+                    className={clsx("relative h-full border-r border-border", collapsed && "absolute left-0 top-0 z-50 shadow-2xl")}
+                    style={{ width }}
+                    onMouseEnter={() => collapsed && setHovering(true)}
+                >
+                    {panel}
+                    {/* resize handle — sits above everything on the right edge */}
+                    <div
+                        className="absolute top-0 right-0 h-full w-2 cursor-ew-resize hover:bg-accent/60 z-[60]"
+                        onMouseDown={startResize}
+                    />
+                </div>
+            )}
         </div>
     );
 });

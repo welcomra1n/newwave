@@ -39,15 +39,17 @@ type CliSessionEntry struct {
 	Alias     string `json:"alias"`     // user-set custom name (overrides title in UI)
 	Pinned    bool   `json:"pinned"`    // user-pinned to top
 	Color     string `json:"color"`     // user-set accent color (hex), shown in sidebar + header
+	Project   string `json:"project"`   // user-assigned project group name ("" = ungrouped)
 }
 
-// CliSessionMetaReq updates user metadata (alias/pinned/color) for a session.
-// Nil pointer fields are left unchanged.
+// CliSessionMetaReq updates user metadata for a session.
+// Nil pointer fields are left unchanged; empty-string clears.
 type CliSessionMetaReq struct {
 	SessionId string  `json:"sessionid"`
 	Alias     *string `json:"alias,omitempty"`
 	Pinned    *bool   `json:"pinned,omitempty"`
 	Color     *string `json:"color,omitempty"`
+	Project   *string `json:"project,omitempty"`
 }
 
 // Instructions for adding a new RPC call
@@ -102,6 +104,8 @@ type WshRpcInterface interface {
 	GetCliSessionsCommand(ctx context.Context) ([]CliSessionEntry, error)
 	SetCliSessionMetaCommand(ctx context.Context, data CliSessionMetaReq) error
 	DeleteCliSessionCommand(ctx context.Context, filePath string) error
+	GetCliProjectsCommand(ctx context.Context) ([]string, error)
+	SetCliProjectsCommand(ctx context.Context, data []string) error
 	GetWaveAIModeConfigCommand(ctx context.Context) (wconfig.AIModeConfigUpdate, error)
 	BlockInfoCommand(ctx context.Context, blockId string) (*BlockInfoData, error)
 	DebugTermCommand(ctx context.Context, data CommandDebugTermData) (*CommandDebugTermRtnData, error)

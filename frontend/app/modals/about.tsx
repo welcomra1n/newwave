@@ -28,7 +28,7 @@ const AboutModalV = ({ versionString, updaterChannel, onClose }: AboutModalVProp
             <div className="flex flex-col gap-[26px] w-full relative z-10">
                 <div className="flex flex-col items-center justify-center gap-4 self-stretch w-full text-center">
                     <Logo />
-                    <div className="text-[25px]">Wave Terminal</div>
+                    <div className="text-[25px]">NewWave</div>
                     <div className="leading-5">
                         Open-Source AI-Integrated Terminal
                         <br />

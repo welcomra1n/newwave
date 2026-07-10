@@ -1,5 +1,5 @@
-/* Radar sweep: a soft gradient band scanning left -> right, GPU-smooth
-   (transform-based), fast, seamless loop. Marks an open/active session. */
+/* Active/open session: a soft radar sweep band scanning left -> right,
+   GPU-smooth, seamless loop. (Colored stroke is applied inline.) */
 @keyframes session-radar {
     from {
         transform: translateX(-120%);

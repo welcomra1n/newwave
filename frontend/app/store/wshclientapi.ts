@@ -426,6 +426,12 @@ export class RpcApiType {
         return client.wshRpcCall("getbuilderstatus", data, opts);
     }
 
+    // command "getcliprojects" [call]
+    GetCliProjectsCommand(client: WshClient, opts?: RpcOpts): Promise<string[]> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "getcliprojects", null, opts);
+        return client.wshRpcCall("getcliprojects", null, opts);
+    }
+
     // command "getclisessions" [call]
     GetCliSessionsCommand(client: WshClient, opts?: RpcOpts): Promise<CliSessionEntry[]> {
         if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "getclisessions", null, opts);
@@ -850,6 +856,12 @@ export class RpcApiType {
     SetBlockFocusCommand(client: WshClient, data: string, opts?: RpcOpts): Promise<void> {
         if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "setblockfocus", data, opts);
         return client.wshRpcCall("setblockfocus", data, opts);
+    }
+
+    // command "setcliprojects" [call]
+    SetCliProjectsCommand(client: WshClient, data: string[], opts?: RpcOpts): Promise<void> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "setcliprojects", data, opts);
+        return client.wshRpcCall("setcliprojects", data, opts);
     }
 
     // command "setclisessionmeta" [call]

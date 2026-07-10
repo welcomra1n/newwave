@@ -222,6 +222,7 @@ declare global {
         alias: string;
         pinned: boolean;
         color: string;
+        project: string;
     };
 
     // wshrpc.CliSessionMetaReq
@@ -230,6 +231,7 @@ declare global {
         alias?: string;
         pinned?: boolean;
         color?: string;
+        project?: string;
     };
 
     // waveobj.Client

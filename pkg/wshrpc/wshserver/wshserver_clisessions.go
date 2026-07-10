@@ -65,6 +65,7 @@ func (ws *WshServer) GetCliSessionsCommand(ctx context.Context) ([]wshrpc.CliSes
 			entry.Alias = m.Alias
 			entry.Pinned = m.Pinned
 			entry.Color = m.Color
+			entry.Project = m.Project
 		}
 		entries = append(entries, entry)
 	}
@@ -82,9 +83,10 @@ func (ws *WshServer) GetCliSessionsCommand(ctx context.Context) ([]wshrpc.CliSes
 // --- user metadata (alias/pin) store: ~/.newwave/sessions-meta.json ---
 
 type sessionMeta struct {
-	Alias  string `json:"alias,omitempty"`
-	Pinned bool   `json:"pinned,omitempty"`
-	Color  string `json:"color,omitempty"`
+	Alias   string `json:"alias,omitempty"`
+	Pinned  bool   `json:"pinned,omitempty"`
+	Color   string `json:"color,omitempty"`
+	Project string `json:"project,omitempty"`
 }
 
 func sessionMetaPath(home string) string {
@@ -133,12 +135,56 @@ func (ws *WshServer) SetCliSessionMetaCommand(ctx context.Context, data wshrpc.C
 	if data.Color != nil {
 		m.Color = strings.TrimSpace(*data.Color)
 	}
-	if m.Alias == "" && !m.Pinned && m.Color == "" {
+	if data.Project != nil {
+		m.Project = strings.TrimSpace(*data.Project)
+	}
+	if m.Alias == "" && !m.Pinned && m.Color == "" && m.Project == "" {
 		delete(meta, data.SessionId) // no metadata left -> drop entry
 	} else {
 		meta[data.SessionId] = m
 	}
 	return writeSessionMeta(home, meta)
+}
+
+// --- project list: ~/.newwave/projects.json ---
+
+func projectsPath(home string) string {
+	return filepath.Join(home, ".newwave", "projects.json")
+}
+
+// GetCliProjectsCommand returns the ordered list of user-created project names.
+func (ws *WshServer) GetCliProjectsCommand(ctx context.Context) ([]string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	out := []string{}
+	data, err := os.ReadFile(projectsPath(home))
+	if err != nil {
+		return out, nil // no file yet -> empty list
+	}
+	_ = json.Unmarshal(data, &out)
+	return out, nil
+}
+
+// SetCliProjectsCommand replaces the project list (create/rename/delete/reorder).
+func (ws *WshServer) SetCliProjectsCommand(ctx context.Context, data []string) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	dir := filepath.Join(home, ".newwave")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	if data == nil {
+		data = []string{}
+	}
+	b, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(projectsPath(home), b, 0o644)
 }
 
 // DeleteCliSessionCommand moves a session's jsonl to a trash dir (recoverable,

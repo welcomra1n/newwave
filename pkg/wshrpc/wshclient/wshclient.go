@@ -424,6 +424,12 @@ func GetBuilderStatusCommand(w *wshutil.WshRpc, data string, opts *wshrpc.RpcOpt
 	return resp, err
 }
 
+// command "getcliprojects", wshserver.GetCliProjectsCommand
+func GetCliProjectsCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) ([]string, error) {
+	resp, err := sendRpcRequestCallHelper[[]string](w, "getcliprojects", nil, opts)
+	return resp, err
+}
+
 // command "getclisessions", wshserver.GetCliSessionsCommand
 func GetCliSessionsCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) ([]wshrpc.CliSessionEntry, error) {
 	resp, err := sendRpcRequestCallHelper[[]wshrpc.CliSessionEntry](w, "getclisessions", nil, opts)
@@ -845,6 +851,12 @@ func SendTelemetryCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) error {
 // command "setblockfocus", wshserver.SetBlockFocusCommand
 func SetBlockFocusCommand(w *wshutil.WshRpc, data string, opts *wshrpc.RpcOpts) error {
 	_, err := sendRpcRequestCallHelper[any](w, "setblockfocus", data, opts)
+	return err
+}
+
+// command "setcliprojects", wshserver.SetCliProjectsCommand
+func SetCliProjectsCommand(w *wshutil.WshRpc, data []string, opts *wshrpc.RpcOpts) error {
+	_, err := sendRpcRequestCallHelper[any](w, "setcliprojects", data, opts)
 	return err
 }
 
