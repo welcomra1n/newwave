@@ -418,6 +418,12 @@ func GetBuilderStatusCommand(w *wshutil.WshRpc, data string, opts *wshrpc.RpcOpt
 	return resp, err
 }
 
+// command "getclisessions", wshserver.GetCliSessionsCommand
+func GetCliSessionsCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) ([]wshrpc.CliSessionEntry, error) {
+	resp, err := sendRpcRequestCallHelper[[]wshrpc.CliSessionEntry](w, "getclisessions", nil, opts)
+	return resp, err
+}
+
 // command "getfocusedblockdata", wshserver.GetFocusedBlockDataCommand
 func GetFocusedBlockDataCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) (*wshrpc.FocusedBlockData, error) {
 	resp, err := sendRpcRequestCallHelper[*wshrpc.FocusedBlockData](w, "getfocusedblockdata", nil, opts)

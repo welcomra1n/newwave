@@ -28,6 +28,16 @@ type MultiArg struct {
 	Args []any `json:"args"`
 }
 
+// CliSessionEntry describes a past CLI agent session (claude/codex) found on disk.
+type CliSessionEntry struct {
+	Agent     string `json:"agent"`     // "claude" | "codex"
+	SessionId string `json:"sessionid"` // resume id
+	Cwd       string `json:"cwd"`       // working dir the session ran in
+	Title     string `json:"title"`     // first user message (best-effort)
+	Mtime     int64  `json:"mtime"`     // file mod time, unix ms
+	FilePath  string `json:"filepath"`  // source jsonl path
+}
+
 // Instructions for adding a new RPC call
 // * methods must end with Command
 // * methods must take context as their first parameter
@@ -77,6 +87,7 @@ type WshRpcInterface interface {
 	SetConfigCommand(ctx context.Context, data MetaSettingsType) error
 	SetConnectionsConfigCommand(ctx context.Context, data ConnConfigRequest) error
 	GetFullConfigCommand(ctx context.Context) (wconfig.FullConfigType, error)
+	GetCliSessionsCommand(ctx context.Context) ([]CliSessionEntry, error)
 	GetWaveAIModeConfigCommand(ctx context.Context) (wconfig.AIModeConfigUpdate, error)
 	BlockInfoCommand(ctx context.Context, blockId string) (*BlockInfoData, error)
 	DebugTermCommand(ctx context.Context, data CommandDebugTermData) (*CommandDebugTermRtnData, error)

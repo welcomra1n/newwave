@@ -211,6 +211,16 @@ declare global {
         secretbindingscomplete: boolean;
     };
 
+    // wshrpc.CliSessionEntry
+    type CliSessionEntry = {
+        agent: string;
+        sessionid: string;
+        cwd: string;
+        title: string;
+        mtime: number;
+        filepath: string;
+    };
+
     // waveobj.Client
     type Client = WaveObj & {
         windowids: string[];
@@ -1589,6 +1599,7 @@ declare global {
         "debug:panictype"?: string;
         "block:view"?: string;
         "block:controller"?: string;
+        "block:subblock"?: boolean;
         "ai:backendtype"?: string;
         "ai:local"?: boolean;
         "wsh:cmd"?: string;
