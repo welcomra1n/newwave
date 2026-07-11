@@ -343,8 +343,19 @@ type codexMetaLine struct {
 	Type    string `json:"type"`
 	Payload struct {
 		SessionId string `json:"session_id"`
+		Id        string `json:"id"` // older codex format stores the id here
 		Cwd       string `json:"cwd"`
 	} `json:"payload"`
+}
+
+// codexIdFromFilename derives the session UUID from a rollout filename as a
+// last-resort fallback: rollout-<timestamp>-<uuid>.jsonl (uuid = final 36 chars).
+func codexIdFromFilename(filePath string) string {
+	base := strings.TrimSuffix(filepath.Base(filePath), ".jsonl")
+	if len(base) < 36 {
+		return ""
+	}
+	return base[len(base)-36:]
 }
 
 type codexItemLine struct {
@@ -376,7 +387,7 @@ func parseCodexSession(c cliSessionCandidate) (wshrpc.CliSessionEntry, bool) {
 		if entry.SessionId == "" {
 			var meta codexMetaLine
 			if json.Unmarshal(b, &meta) == nil && meta.Type == "session_meta" {
-				entry.SessionId = meta.Payload.SessionId
+				entry.SessionId = firstNonEmpty(meta.Payload.SessionId, meta.Payload.Id)
 				entry.Cwd = meta.Payload.Cwd
 				continue
 			}
@@ -392,7 +403,11 @@ func parseCodexSession(c cliSessionCandidate) (wshrpc.CliSessionEntry, bool) {
 		}
 	}
 	if entry.SessionId == "" {
-		// no valid meta header -> not resumable, drop
+		// meta header missing the id -> fall back to the filename UUID
+		entry.SessionId = codexIdFromFilename(c.filePath)
+	}
+	if entry.SessionId == "" {
+		// still no id -> not resumable, drop
 		return entry, false
 	}
 	entry.Title = firstNonEmpty(bestTitle, fallbackTitle, "(제목 없음)")
