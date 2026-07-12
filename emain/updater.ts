@@ -215,6 +215,7 @@ export function getResolvedUpdateChannel(): string {
 }
 
 ipcMain.on("install-app-update", () => fireAndForget(updater?.promptToInstallUpdate.bind(updater)));
+ipcMain.on("check-for-updates", () => fireAndForget(() => updater?.checkForUpdates(true)));
 ipcMain.on("get-app-update-status", (event) => {
     event.returnValue = updater?.status;
 });

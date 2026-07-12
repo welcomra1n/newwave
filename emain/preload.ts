@@ -40,6 +40,7 @@ contextBridge.exposeInMainWorld("api", {
     getUpdaterStatus: () => ipcRenderer.sendSync("get-app-update-status"),
     getUpdaterChannel: () => ipcRenderer.sendSync("get-updater-channel"),
     installAppUpdate: () => ipcRenderer.send("install-app-update"),
+    checkForUpdates: () => ipcRenderer.send("check-for-updates"),
     onMenuItemAbout: (callback) => ipcRenderer.on("menu-item-about", callback),
     updateWindowControlsOverlay: (rect) => ipcRenderer.send("update-window-controls-overlay", rect),
     onReinjectKey: (callback) => ipcRenderer.on("reinject-key", (_event, waveEvent) => callback(waveEvent)),

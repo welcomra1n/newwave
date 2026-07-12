@@ -447,6 +447,63 @@ const SessionItem = memo(
 );
 SessionItem.displayName = "SessionItem";
 
+// preload electron api (getApi in global.ts is not exported)
+function updApi(): any {
+    return (window as any).api;
+}
+
+// Footer button: manual "check for updates" + one-click install when a build is ready.
+// The app also auto-checks every 10 min; this gives an always-visible manual control.
+const UpdateFooter = memo(({ status }: { status: string }) => {
+    const busy = status === "checking" || status === "downloading" || status === "installing";
+    const ready = status === "ready";
+    let label: string;
+    let icon: string;
+    if (ready) {
+        label = "업데이트 재시작";
+        icon = "fa-circle-down";
+    } else if (status === "checking") {
+        label = "업데이트 확인 중…";
+        icon = "fa-spinner fa-spin";
+    } else if (status === "downloading") {
+        label = "내려받는 중…";
+        icon = "fa-spinner fa-spin";
+    } else if (status === "installing") {
+        label = "설치 중…";
+        icon = "fa-spinner fa-spin";
+    } else {
+        label = "업데이트 확인";
+        icon = "fa-rotate";
+    }
+    const onClick = () => {
+        if (busy) return;
+        if (ready) updApi().installAppUpdate();
+        else updApi().checkForUpdates?.();
+    };
+    return (
+        <div className="border-t border-border px-1.5 py-1.5">
+            <button
+                type="button"
+                disabled={busy}
+                onClick={onClick}
+                title={ready ? "새 버전 설치하고 재시작" : "업데이트 확인"}
+                className={clsx(
+                    "flex items-center justify-center gap-1.5 w-full text-[11px] rounded-sm px-2 py-1 transition-colors",
+                    ready
+                        ? "bg-accent text-black font-semibold hover:brightness-110 cursor-pointer"
+                        : busy
+                          ? "text-secondary opacity-60 cursor-default"
+                          : "text-secondary hover:text-white hover:bg-hoverbg cursor-pointer"
+                )}
+            >
+                <i className={clsx("fa fa-solid", icon)} />
+                <span style={{ whiteSpace: "nowrap" }}>{label}</span>
+            </button>
+        </div>
+    );
+});
+UpdateFooter.displayName = "UpdateFooter";
+
 const SessionSidebar = memo(() => {
     const [sessions, setSessions] = useState<CliSessionEntry[]>([]);
     const [projects, setProjects] = useState<string[]>([]);
@@ -466,6 +523,7 @@ const SessionSidebar = memo(() => {
     const [editDraft, setEditDraft] = useState("");
     const [selected, setSelected] = useState<Set<string>>(new Set());
     const [dragOverGroup, setDragOverGroup] = useState<string | null>(null);
+    const updaterStatus = useAtomValue(atoms.updaterStatusAtom);
 
     const toggleSelect = useCallback((sessionid: string) => {
         setSelected((prev) => {
@@ -843,6 +901,7 @@ const SessionSidebar = memo(() => {
                     })
                 )}
             </div>
+            <UpdateFooter status={updaterStatus} />
         </div>
     );
 

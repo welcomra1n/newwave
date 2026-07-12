@@ -105,6 +105,7 @@ declare global {
         getUpdaterStatus: () => UpdaterStatus; // get-app-update-status
         getUpdaterChannel: () => string; // get-updater-channel
         installAppUpdate: () => void; // install-app-update
+        checkForUpdates: () => void; // check-for-updates
         onMenuItemAbout: (callback: () => void) => void; // menu-item-about
         updateWindowControlsOverlay: (rect: Dimensions) => void; // update-window-controls-overlay
         onReinjectKey: (callback: (waveEvent: WaveKeyboardEvent) => void) => void; // reinject-key
