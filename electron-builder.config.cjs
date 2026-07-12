@@ -107,7 +107,7 @@ const config = {
     publish: {
         provider: "github",
         owner: "welcomra1n",
-        repo: "newwave",
+        repo: "newwave-releases",
         releaseType: "release",
     },
     afterPack: (context) => {
