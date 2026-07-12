@@ -173,6 +173,10 @@ tasks:
 
     build:server:
         desc: Build the wavesrv component.
+        # method:none = always rebuild. The checksum cache in .task/ survives `clean`
+        # (which only wipes dist/), so a cached checksum could skip this even after the
+        # wavesrv binary was deleted — shipping a backend-less app. Never risk that.
+        method: none
         cmds:
             - task: build:server:linux
             - task: build:server:macos
@@ -180,15 +184,6 @@ tasks:
         deps:
             - go:mod:tidy
             - generate
-        sources:
-            - "cmd/server/*.go"
-            - "pkg/**/*.go"
-            - "pkg/**/*.json"
-            - "pkg/**/*.sh"
-            - tsunami/**/*.go
-            - package.json
-        generates:
-            - dist/bin/wavesrv.*
 
     build:server:macos:
         desc: Build the wavesrv component for macOS (Darwin) platforms (generates artifacts for both arm64 and amd64).

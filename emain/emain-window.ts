@@ -929,6 +929,17 @@ export async function relaunchBrowserWindows() {
             console.log("designated quake window", win.waveWindowId);
         }
     }
+    // With window:savelastwindow=false the last window is not persisted, so on the
+    // next boot windowids is empty. Guarantee at least one window instead of booting headless.
+    if (wins.length === 0) {
+        console.log("relaunch -- no saved windows, creating a default window");
+        const win = await createBrowserWindow(null, fullConfig, {
+            unamePlatform,
+            isPrimaryStartupWindow: isFirstRelaunch,
+            foregroundWindow: true,
+        });
+        wins.push(win);
+    }
     hasCompletedFirstRelaunch = true;
     for (const win of wins) {
         console.log("show window", win.waveWindowId);
