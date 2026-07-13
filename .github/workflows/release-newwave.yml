@@ -47,9 +47,13 @@ jobs:
 
       - name: Install Zig (Windows CGO)
         if: runner.os == 'Windows'
-        uses: mlugg/setup-zig@v1
-        with:
-          version: 0.16.0
+        shell: bash
+        run: |
+          set -e
+          ZIG_VER=0.14.1
+          curl -fsSL "https://ziglang.org/download/${ZIG_VER}/zig-windows-x86_64-${ZIG_VER}.zip" -o zig.zip
+          unzip -q zig.zip
+          echo "$PWD/zig-windows-x86_64-${ZIG_VER}" >> "$GITHUB_PATH"
 
       - name: Install deps
         run: npm install
