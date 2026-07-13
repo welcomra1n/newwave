@@ -185,6 +185,18 @@ function openSession(s: CliSessionEntry) {
     fireAndForget(() => createBlock(blockDef));
 }
 
+// Start a fresh claude/codex session (no --resume) in a new terminal block.
+function newSession(agent: "claude" | "codex") {
+    const blockDef: BlockDef = {
+        meta: {
+            view: "term",
+            controller: "cmd",
+            cmd: agent,
+        },
+    };
+    fireAndForget(() => createBlock(blockDef));
+}
+
 // --- agent icons (real marks, not text labels) ---
 
 const ClaudeIcon = memo(({ size = 14 }: { size?: number }) => (
@@ -795,6 +807,26 @@ const SessionSidebar = memo(() => {
                     }}
                 >
                     <i className={clsx("fa fa-solid", collapsed ? "fa-angles-right" : "fa-angles-left")} />
+                </button>
+            </div>
+            <div className="flex gap-1 px-1.5 py-1 border-b border-border">
+                <button
+                    type="button"
+                    className="flex-1 flex items-center justify-center gap-1.5 text-[11px] rounded-sm py-1 text-secondary hover:text-white hover:bg-hoverbg cursor-pointer"
+                    title="새 Claude 세션 시작"
+                    onClick={() => newSession("claude")}
+                >
+                    <ClaudeIcon size={12} />
+                    <span style={{ whiteSpace: "nowrap" }}>새 Claude</span>
+                </button>
+                <button
+                    type="button"
+                    className="flex-1 flex items-center justify-center gap-1.5 text-[11px] rounded-sm py-1 text-secondary hover:text-white hover:bg-hoverbg cursor-pointer"
+                    title="새 Codex 세션 시작"
+                    onClick={() => newSession("codex")}
+                >
+                    <CodexIcon size={12} />
+                    <span style={{ whiteSpace: "nowrap" }}>새 Codex</span>
                 </button>
             </div>
             <div className="px-1.5 py-1 border-b border-border">
