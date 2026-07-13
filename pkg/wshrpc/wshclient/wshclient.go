@@ -842,6 +842,12 @@ func RouteUnannounceCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) error {
 	return err
 }
 
+// command "searchclisessions", wshserver.SearchCliSessionsCommand
+func SearchCliSessionsCommand(w *wshutil.WshRpc, data wshrpc.CliSessionSearchReq, opts *wshrpc.RpcOpts) ([]wshrpc.CliSessionEntry, error) {
+	resp, err := sendRpcRequestCallHelper[[]wshrpc.CliSessionEntry](w, "searchclisessions", data, opts)
+	return resp, err
+}
+
 // command "sendtelemetry", wshserver.SendTelemetryCommand
 func SendTelemetryCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) error {
 	_, err := sendRpcRequestCallHelper[any](w, "sendtelemetry", nil, opts)

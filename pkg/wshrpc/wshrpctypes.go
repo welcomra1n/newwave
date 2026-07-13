@@ -48,6 +48,11 @@ type CliBulkProjectReq struct {
 	Project    string   `json:"project"`
 }
 
+// CliSessionSearchReq searches sessions by title/alias and file content.
+type CliSessionSearchReq struct {
+	Query string `json:"query"`
+}
+
 // CliSessionMetaReq updates user metadata for a session.
 // Nil pointer fields are left unchanged; empty-string clears.
 type CliSessionMetaReq struct {
@@ -108,6 +113,7 @@ type WshRpcInterface interface {
 	SetConnectionsConfigCommand(ctx context.Context, data ConnConfigRequest) error
 	GetFullConfigCommand(ctx context.Context) (wconfig.FullConfigType, error)
 	GetCliSessionsCommand(ctx context.Context) ([]CliSessionEntry, error)
+	SearchCliSessionsCommand(ctx context.Context, data CliSessionSearchReq) ([]CliSessionEntry, error)
 	SetCliSessionMetaCommand(ctx context.Context, data CliSessionMetaReq) error
 	SetCliSessionsProjectCommand(ctx context.Context, data CliBulkProjectReq) error
 	DeleteCliSessionCommand(ctx context.Context, filePath string) error

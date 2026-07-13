@@ -19,9 +19,10 @@ import (
 )
 
 const (
-	cliSessionsMaxResults = 200 // cap returned entries
-	cliSessionsScanLines  = 80  // max lines scanned per file for cwd/title
-	cliSessionsTitleLen   = 100 // max title chars
+	cliSessionsMaxResults  = 200  // cap returned entries
+	cliSessionsScanLines   = 80   // max lines scanned per file for cwd/title
+	cliSessionsTitleLen    = 100  // max title chars
+	cliSessionsSearchLines = 4000 // max lines scanned per file for content search
 )
 
 type cliSessionCandidate struct {
@@ -78,6 +79,49 @@ func (ws *WshServer) GetCliSessionsCommand(ctx context.Context) ([]wshrpc.CliSes
 		return entries[i].Mtime > entries[j].Mtime
 	})
 	return entries, nil
+}
+
+// SearchCliSessionsCommand returns sessions whose title/alias or file content matches the query.
+// Reuses GetCliSessions (parsed titles + user meta), then content-scans only the entries that
+// don't already match by title, so a title hit never pays the file-read cost.
+func (ws *WshServer) SearchCliSessionsCommand(ctx context.Context, data wshrpc.CliSessionSearchReq) ([]wshrpc.CliSessionEntry, error) {
+	entries, err := ws.GetCliSessionsCommand(ctx)
+	if err != nil {
+		return nil, err
+	}
+	q := strings.ToLower(strings.TrimSpace(data.Query))
+	if q == "" {
+		return entries, nil
+	}
+	out := make([]wshrpc.CliSessionEntry, 0, len(entries))
+	for _, e := range entries {
+		if strings.Contains(strings.ToLower(e.Alias), q) || strings.Contains(strings.ToLower(e.Title), q) {
+			out = append(out, e)
+			continue
+		}
+		if fileContainsQuery(e.FilePath, q) {
+			out = append(out, e)
+		}
+	}
+	return out, nil
+}
+
+// fileContainsQuery scans a session file for a case-insensitive substring, bounded to keep
+// search responsive on large transcripts.
+func fileContainsQuery(filePath, lowerQuery string) bool {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	for i := 0; i < cliSessionsSearchLines && sc.Scan(); i++ {
+		if strings.Contains(strings.ToLower(sc.Text()), lowerQuery) {
+			return true
+		}
+	}
+	return false
 }
 
 // --- user metadata (alias/pin) store: ~/.newwave/sessions-meta.json ---

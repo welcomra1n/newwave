@@ -240,6 +240,11 @@ declare global {
         project?: string;
     };
 
+    // wshrpc.CliSessionSearchReq
+    type CliSessionSearchReq = {
+        query: string;
+    };
+
     // waveobj.Client
     type Client = WaveObj & {
         windowids: string[];

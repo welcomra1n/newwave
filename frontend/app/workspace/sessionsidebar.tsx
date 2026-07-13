@@ -524,6 +524,9 @@ const SessionSidebar = memo(() => {
     const [selected, setSelected] = useState<Set<string>>(new Set());
     const [dragOverGroup, setDragOverGroup] = useState<string | null>(null);
     const updaterStatus = useAtomValue(atoms.updaterStatusAtom);
+    const [query, setQuery] = useState("");
+    // sessionids whose file *content* matches the query (title/alias match is done client-side for instant feedback)
+    const [contentMatchIds, setContentMatchIds] = useState<Set<string> | null>(null);
 
     const toggleSelect = useCallback((sessionid: string) => {
         setSelected((prev) => {
@@ -556,6 +559,32 @@ const SessionSidebar = memo(() => {
     useEffect(() => {
         load();
     }, [load, listVersion]);
+
+    // Debounced content search: title/alias matching is instant (client-side in `shown`);
+    // this fills in sessions that match only by transcript content.
+    useEffect(() => {
+        const q = query.trim();
+        if (!q) {
+            setContentMatchIds(null);
+            return;
+        }
+        let cancelled = false;
+        const timer = setTimeout(() => {
+            fireAndForget(async () => {
+                try {
+                    const res = await RpcApi.SearchCliSessionsCommand(TabRpcClient, { query: q });
+                    if (!cancelled) setContentMatchIds(new Set((res ?? []).map((s) => s.sessionid)));
+                } catch (e) {
+                    console.error("SearchCliSessions failed", e);
+                    if (!cancelled) setContentMatchIds(new Set());
+                }
+            });
+        }, 200);
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [query]);
 
     // Keep any OPEN block's header (title + color) in sync with the session's
     // alias/color, so a block opened before those were set still matches.
@@ -692,7 +721,14 @@ const SessionSidebar = memo(() => {
         [selected, projects, assignManyToProject]
     );
 
-    const shown = sessions.filter((s) => filter === "all" || s.agent === filter);
+    const q = query.trim().toLowerCase();
+    const shown = sessions.filter((s) => {
+        if (filter !== "all" && s.agent !== filter) return false;
+        if (!q) return true;
+        // instant title/alias/cwd match, plus backend content match (fills in after debounce)
+        const hay = `${s.alias ?? ""} ${s.title ?? ""} ${s.cwd ?? ""}`.toLowerCase();
+        return hay.includes(q) || (contentMatchIds?.has(s.sessionid) ?? false);
+    });
     const showPanel = !collapsed || hovering;
     const counts: Record<AgentFilter, number> = {
         all: sessions.length,
@@ -761,6 +797,30 @@ const SessionSidebar = memo(() => {
                     <i className={clsx("fa fa-solid", collapsed ? "fa-angles-right" : "fa-angles-left")} />
                 </button>
             </div>
+            <div className="px-1.5 py-1 border-b border-border">
+                <div className="relative">
+                    <i className="fa fa-solid fa-magnifying-glass absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted pointer-events-none" />
+                    <input
+                        placeholder="세션 검색 (제목·내용)"
+                        className="text-xs bg-black/40 text-white rounded-sm pl-6 pr-6 py-1 w-full outline-none border border-border focus:border-accent"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === "Escape") setQuery("");
+                        }}
+                    />
+                    {query && (
+                        <button
+                            type="button"
+                            className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted hover:text-white text-[10px] cursor-pointer"
+                            title="지우기"
+                            onClick={() => setQuery("")}
+                        >
+                            <i className="fa fa-solid fa-xmark" />
+                        </button>
+                    )}
+                </div>
+            </div>
             <div className="flex gap-0.5 px-1.5 py-1 border-b border-border">
                 {(["all", "claude", "codex"] as AgentFilter[]).map((f) => (
                     <button
@@ -816,6 +876,8 @@ const SessionSidebar = memo(() => {
                     <div className="flex justify-center py-4 text-muted">
                         <i className="fa fa-solid fa-spinner fa-spin" />
                     </div>
+                ) : q && shown.length === 0 ? (
+                    <div className="text-xs text-muted text-center py-4 px-2">검색 결과 없음</div>
                 ) : shown.length === 0 && projects.length === 0 ? (
                     <div className="text-xs text-muted text-center py-4 px-2">세션 없음</div>
                 ) : (
