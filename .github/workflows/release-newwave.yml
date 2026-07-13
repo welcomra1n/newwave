@@ -53,7 +53,8 @@ jobs:
           ZIG_VER=0.14.1
           curl -fsSL "https://ziglang.org/download/${ZIG_VER}/zig-x86_64-windows-${ZIG_VER}.zip" -o zig.zip
           unzip -q zig.zip
-          echo "$PWD/zig-x86_64-windows-${ZIG_VER}" >> "$GITHUB_PATH"
+          # write a Windows-native path (pwd -W) so pwsh/go's cgo can resolve zig.exe
+          echo "$(pwd -W)/zig-x86_64-windows-${ZIG_VER}" >> "$GITHUB_PATH"
 
       - name: Install deps
         run: npm install
