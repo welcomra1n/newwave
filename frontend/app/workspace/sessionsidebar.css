@@ -32,3 +32,31 @@
     will-change: transform;
     pointer-events: none;
 }
+
+/* Thin, subtle scrollbar for the session list — only shows on hover over the track. */
+.session-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+    transition: scrollbar-color 0.2s;
+}
+.session-scroll:hover {
+    scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+.session-scroll::-webkit-scrollbar {
+    width: 8px;
+}
+.session-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+.session-scroll::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+}
+.session-scroll:hover::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.18);
+}
+.session-scroll::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.32);
+}

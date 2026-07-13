@@ -420,7 +420,7 @@ const SessionItem = memo(
                     e.dataTransfer.effectAllowed = "move";
                 }}
                 className={clsx(
-                    "flex items-center gap-1.5 px-2 py-1.5 rounded-md cursor-pointer group overflow-hidden bg-white/[0.035] hover:bg-white/[0.08]",
+                    "flex items-center gap-1.5 px-2 py-1.5 rounded-md cursor-pointer group overflow-hidden bg-white/[0.035] hover:bg-white/[0.08] transition-colors duration-150",
                     active ? "border-2 session-active-radar" : "border border-white/10 hover:border-white/20",
                     selected && "ring-2 ring-accent ring-inset"
                 )}
@@ -853,7 +853,7 @@ const SessionSidebar = memo(() => {
             <div className="flex gap-1 px-1.5 py-1 border-b border-border">
                 <button
                     type="button"
-                    className="flex-1 flex items-center justify-center gap-1.5 text-[11px] rounded-sm py-1 text-secondary hover:text-white hover:bg-hoverbg cursor-pointer"
+                    className="flex-1 flex items-center justify-center gap-1.5 text-[11px] rounded-sm py-1 text-secondary hover:text-white hover:bg-hoverbg cursor-pointer transition-colors duration-150"
                     title="새 Claude 세션 시작"
                     onClick={() => newSession("claude")}
                 >
@@ -862,7 +862,7 @@ const SessionSidebar = memo(() => {
                 </button>
                 <button
                     type="button"
-                    className="flex-1 flex items-center justify-center gap-1.5 text-[11px] rounded-sm py-1 text-secondary hover:text-white hover:bg-hoverbg cursor-pointer"
+                    className="flex-1 flex items-center justify-center gap-1.5 text-[11px] rounded-sm py-1 text-secondary hover:text-white hover:bg-hoverbg cursor-pointer transition-colors duration-150"
                     title="새 Codex 세션 시작"
                     onClick={() => newSession("codex")}
                 >
@@ -945,7 +945,7 @@ const SessionSidebar = memo(() => {
                     </button>
                 </div>
             )}
-            <div className="flex-grow overflow-y-auto overflow-x-hidden px-1.5 py-1.5">
+            <div className="session-scroll flex-grow overflow-y-auto overflow-x-hidden px-1.5 py-1.5">
                 {loading ? (
                     <div className="flex justify-center py-4 text-muted">
                         <i className="fa fa-solid fa-spinner fa-spin" />
