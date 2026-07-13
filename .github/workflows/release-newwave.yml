@@ -1,0 +1,58 @@
+# Auto build + publish NewWave to welcomra1n/newwave-releases.
+# Triggers when package.json changes on main (i.e. a version bump) or manually.
+# electron-builder skips publishing if the release for that version already exists,
+# so an unrelated package.json edit is harmless.
+#
+# One-time setup (Settings > Secrets and variables > Actions):
+#   RELEASE_TOKEN         - a PAT (classic, repo scope) with write access to welcomra1n/newwave-releases
+#   MAC_CSC_LINK          - (optional) base64 of your Apple Development .p12 cert; needed for mac auto-update
+#   MAC_CSC_KEY_PASSWORD  - (optional) password for that .p12
+# Also enable Actions: Settings > Actions > General > Allow all actions.
+
+name: Release NewWave
+
+on:
+  push:
+    branches: [main]
+    paths: ["package.json"]
+  workflow_dispatch:
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install Task
+        uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Zig (Windows CGO)
+        if: runner.os == 'Windows'
+        uses: mlugg/setup-zig@v1
+        with:
+          version: 0.16.0
+
+      - name: Install deps
+        run: npm install
+
+      - name: Build and publish
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+        run: task package -- -p always

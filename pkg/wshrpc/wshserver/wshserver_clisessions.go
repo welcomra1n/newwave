@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	cliSessionsMaxResults  = 200  // cap returned entries
+	cliSessionsMaxResults  = 500  // cap returned entries
 	cliSessionsScanLines   = 80   // max lines scanned per file for cwd/title
 	cliSessionsTitleLen    = 100  // max title chars
 	cliSessionsSearchLines = 4000 // max lines scanned per file for content search
@@ -495,7 +495,7 @@ func isNoiseTitle(s string) bool {
 	noisePrefixes := []string{
 		"<system-reminder", "<command-", "<local-command", "[Image",
 		"# AGENTS.md", "Caveat:", "This session is being continued",
-		"<user-prompt-submit-hook", "<persisted-",
+		"<user-prompt-submit-hook", "<persisted-", "<budget", "```",
 	}
 	for _, p := range noisePrefixes {
 		if strings.HasPrefix(t, p) {
@@ -505,6 +505,16 @@ func isNoiseTitle(s string) bool {
 	// bare slash command, e.g. "/resume", "/clear"
 	if strings.HasPrefix(t, "/") && !strings.ContainsAny(t, " \t") && len(t) < 24 {
 		return true
+	}
+	// bare filesystem path with no prose (e.g. a dropped file path) — not a real prompt.
+	// unix "/Users/…/x" or windows "C:\…"; requires a path separator and no spaces.
+	if !strings.ContainsAny(t, " \t") {
+		if strings.HasPrefix(t, "/") && strings.Count(t, "/") >= 2 {
+			return true
+		}
+		if len(t) > 2 && t[1] == ':' && (t[2] == '\\' || t[2] == '/') {
+			return true
+		}
 	}
 	return false
 }

@@ -16,13 +16,14 @@ import { atoms, createBlock, getBlockMetaKeyAtom, refocusNode, WOS } from "@/sto
 import { fireAndForget } from "@/util/util";
 import clsx from "clsx";
 import { atom, useAtom, useAtomValue } from "jotai";
+import { atomWithStorage } from "jotai/utils";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import "./sessionsidebar.css";
 
-// persisted-ish toggle (module-level; resets on full reload, fine for v1)
-export const sessionSidebarVisibleAtom = atom(true);
-export const sessionSidebarWidthAtom = atom(240);
-export const sessionSidebarCollapsedAtom = atom(false);
+// Persisted across launches via localStorage (survives full reload).
+export const sessionSidebarVisibleAtom = atomWithStorage("newwave:sidebar:visible", true);
+export const sessionSidebarWidthAtom = atomWithStorage("newwave:sidebar:width", 240);
+export const sessionSidebarCollapsedAtom = atomWithStorage("newwave:sidebar:collapsed", false);
 
 const SIDEBAR_MIN_W = 170;
 const SIDEBAR_MAX_W = 460;
@@ -69,10 +70,14 @@ export function clearSessionWorking(sessionid: string) {
 }
 
 // Short two-note "done" chime via Web Audio (no asset needed).
+// One shared AudioContext, reused across calls (creating one per call leaks contexts
+// and browsers cap how many can exist).
+let sharedAudioCtx: AudioContext | null = null;
 export function playDoneSound() {
     try {
         const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-        const ctx = new Ctx();
+        if (!sharedAudioCtx) sharedAudioCtx = new Ctx();
+        const ctx = sharedAudioCtx;
         if (ctx.state === "suspended") void ctx.resume();
         const play = (freq: number, start: number, dur: number) => {
             const o = ctx.createOscillator();
@@ -89,7 +94,6 @@ export function playDoneSound() {
         };
         play(784, 0, 0.15); // G5
         play(1047, 0.13, 0.22); // C6
-        setTimeout(() => ctx.close(), 600);
     } catch {
         // audio best-effort
     }
@@ -158,8 +162,12 @@ function findOpenBlockId(sessionid: string): string | null {
     return null;
 }
 
+// Last working dir a session was opened in — reused as the default cwd for "새 세션".
+let lastSessionCwd: string | undefined;
+
 function openSession(s: CliSessionEntry) {
     clearSessionAttention(s.sessionid); // opening = acknowledged
+    if (s.cwd) lastSessionCwd = s.cwd;
     // already open -> just focus it, don't spawn a duplicate block
     const existing = findOpenBlockId(s.sessionid);
     if (existing) {
@@ -185,6 +193,22 @@ function openSession(s: CliSessionEntry) {
     fireAndForget(() => createBlock(blockDef));
 }
 
+// Open a *forked copy* of a session. Works even when the original is still live as a
+// background agent (plain --resume refuses to double-attach; fork branches a new thread).
+function openSessionFork(s: CliSessionEntry) {
+    const isClaude = s.agent === "claude";
+    const cmd = isClaude ? `claude --resume ${s.sessionid} --fork-session` : `codex fork ${s.sessionid}`;
+    const blockDef: BlockDef = {
+        meta: {
+            view: "term",
+            controller: "cmd",
+            cmd: cmd,
+            "cmd:cwd": s.cwd || undefined,
+        },
+    };
+    fireAndForget(() => createBlock(blockDef));
+}
+
 // Start a fresh claude/codex session (no --resume) in a new terminal block.
 function newSession(agent: "claude" | "codex") {
     const blockDef: BlockDef = {
@@ -192,6 +216,8 @@ function newSession(agent: "claude" | "codex") {
             view: "term",
             controller: "cmd",
             cmd: agent,
+            // start in the last folder a session was opened from (falls back to app default)
+            "cmd:cwd": lastSessionCwd || undefined,
         },
     };
     fireAndForget(() => createBlock(blockDef));
@@ -362,6 +388,7 @@ const SessionItem = memo(
                     })),
                 ];
                 const menu: ContextMenuItem[] = [
+                    { label: "복사본으로 열기 (fork)", click: () => openSessionFork(session) },
                     { label: "이름 변경", click: startRename },
                     { label: session.pinned ? "고정 해제" : "상단 고정", click: togglePin },
                     { label: "색상", submenu: colorMenu },
@@ -469,6 +496,14 @@ function updApi(): any {
 const UpdateFooter = memo(({ status }: { status: string }) => {
     const busy = status === "checking" || status === "downloading" || status === "installing";
     const ready = status === "ready";
+    const [version, setVersion] = useState("");
+    useEffect(() => {
+        try {
+            setVersion(updApi().getAboutModalDetails?.()?.version ?? "");
+        } catch {
+            // best-effort
+        }
+    }, []);
     let label: string;
     let icon: string;
     if (ready) {
@@ -511,6 +546,12 @@ const UpdateFooter = memo(({ status }: { status: string }) => {
                 <i className={clsx("fa fa-solid", icon)} />
                 <span style={{ whiteSpace: "nowrap" }}>{label}</span>
             </button>
+            {version && (
+                <div className="text-[10px] text-muted text-center mt-1" style={{ whiteSpace: "nowrap" }}>
+                    NewWave v{version}
+                    {status === "up-to-date" ? " · 최신" : ""}
+                </div>
+            )}
         </div>
     );
 });
@@ -839,6 +880,7 @@ const SessionSidebar = memo(() => {
                         onChange={(e) => setQuery(e.target.value)}
                         onKeyDown={(e) => {
                             if (e.key === "Escape") setQuery("");
+                            else if (e.key === "Enter" && shown.length > 0) openSession(shown[0]);
                         }}
                     />
                     {query && (
