@@ -60,8 +60,10 @@ jobs:
       - name: Build and publish
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          # mac-only: passing the Apple .p12 to the Windows runner makes electron-builder
+          # try to sign Windows with it → "Multiple certificates found". Empty on Windows.
+          CSC_LINK: ${{ runner.os == 'macOS' && secrets.MAC_CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ runner.os == 'macOS' && secrets.MAC_CSC_KEY_PASSWORD || '' }}
           # raise V8 heap — the runner OOMs (exit 134) during the vite/electron-builder build
           NODE_OPTIONS: --max-old-space-size=6144
         run: task package -- -p always
