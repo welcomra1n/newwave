@@ -19,14 +19,12 @@ on:
 
 jobs:
   release:
-    # Windows only: CI can't sign the mac build (no Apple cert on the runner), and an
-    # unsigned mac asset breaks mac auto-update signature validation. Build mac locally
-    # (where the Apple Development cert lives). Add macos-latest here only once
-    # MAC_CSC_LINK / MAC_CSC_KEY_PASSWORD secrets are configured.
+    # Both platforms. Mac is signed in CI via MAC_CSC_LINK / MAC_CSC_KEY_PASSWORD secrets
+    # (base64 of the Apple Development .p12 + its password) so mac auto-update validates.
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest]
+        os: [windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
