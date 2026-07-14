@@ -53,6 +53,16 @@ type CliSessionSearchReq struct {
 	Query string `json:"query"`
 }
 
+// SshHostEntry is a saved SSH connection, backed by ~/.ssh/config.
+type SshHostEntry struct {
+	Alias        string `json:"alias"`
+	HostName     string `json:"hostname"`
+	User         string `json:"user"`
+	Port         string `json:"port"`
+	IdentityFile string `json:"identityfile"`
+	Managed      bool   `json:"managed"` // true = added by NewWave (editable/deletable)
+}
+
 // CliSessionMetaReq updates user metadata for a session.
 // Nil pointer fields are left unchanged; empty-string clears.
 type CliSessionMetaReq struct {
@@ -116,6 +126,9 @@ type WshRpcInterface interface {
 	SearchCliSessionsCommand(ctx context.Context, data CliSessionSearchReq) ([]CliSessionEntry, error)
 	SetCliSessionMetaCommand(ctx context.Context, data CliSessionMetaReq) error
 	SetCliSessionsProjectCommand(ctx context.Context, data CliBulkProjectReq) error
+	GetSshHostsCommand(ctx context.Context) ([]SshHostEntry, error)
+	SetSshHostCommand(ctx context.Context, data SshHostEntry) error
+	DeleteSshHostCommand(ctx context.Context, alias string) error
 	DeleteCliSessionCommand(ctx context.Context, filePath string) error
 	GetCliProjectsCommand(ctx context.Context) ([]string, error)
 	SetCliProjectsCommand(ctx context.Context, data []string) error

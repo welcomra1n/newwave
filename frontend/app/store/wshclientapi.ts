@@ -222,6 +222,12 @@ export class RpcApiType {
         return client.wshRpcCall("deleteclisession", data, opts);
     }
 
+    // command "deletesshhost" [call]
+    DeleteSshHostCommand(client: WshClient, data: string, opts?: RpcOpts): Promise<void> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "deletesshhost", data, opts);
+        return client.wshRpcCall("deletesshhost", data, opts);
+    }
+
     // command "deletesubblock" [call]
     DeleteSubBlockCommand(client: WshClient, data: CommandDeleteBlockData, opts?: RpcOpts): Promise<void> {
         if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "deletesubblock", data, opts);
@@ -484,6 +490,12 @@ export class RpcApiType {
     GetSecretsNamesCommand(client: WshClient, opts?: RpcOpts): Promise<string[]> {
         if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "getsecretsnames", null, opts);
         return client.wshRpcCall("getsecretsnames", null, opts);
+    }
+
+    // command "getsshhosts" [call]
+    GetSshHostsCommand(client: WshClient, opts?: RpcOpts): Promise<SshHostEntry[]> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "getsshhosts", null, opts);
+        return client.wshRpcCall("getsshhosts", null, opts);
     }
 
     // command "gettab" [call]
@@ -916,6 +928,12 @@ export class RpcApiType {
     SetSecretsCommand(client: WshClient, data: {[key: string]: string}, opts?: RpcOpts): Promise<void> {
         if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "setsecrets", data, opts);
         return client.wshRpcCall("setsecrets", data, opts);
+    }
+
+    // command "setsshhost" [call]
+    SetSshHostCommand(client: WshClient, data: SshHostEntry, opts?: RpcOpts): Promise<void> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "setsshhost", data, opts);
+        return client.wshRpcCall("setsshhost", data, opts);
     }
 
     // command "setvar" [call]

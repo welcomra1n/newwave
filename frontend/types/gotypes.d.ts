@@ -1521,6 +1521,16 @@ declare global {
         "tsunami:gopath"?: string;
     };
 
+    // wshrpc.SshHostEntry
+    type SshHostEntry = {
+        alias: string;
+        hostname: string;
+        user: string;
+        port: string;
+        identityfile: string;
+        managed: boolean;
+    };
+
     // waveobj.StickerClickOptsType
     type StickerClickOptsType = {
         sendinput?: string;

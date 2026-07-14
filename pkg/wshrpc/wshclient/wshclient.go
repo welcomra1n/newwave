@@ -221,6 +221,12 @@ func DeleteCliSessionCommand(w *wshutil.WshRpc, data string, opts *wshrpc.RpcOpt
 	return err
 }
 
+// command "deletesshhost", wshserver.DeleteSshHostCommand
+func DeleteSshHostCommand(w *wshutil.WshRpc, data string, opts *wshrpc.RpcOpts) error {
+	_, err := sendRpcRequestCallHelper[any](w, "deletesshhost", data, opts)
+	return err
+}
+
 // command "deletesubblock", wshserver.DeleteSubBlockCommand
 func DeleteSubBlockCommand(w *wshutil.WshRpc, data wshrpc.CommandDeleteBlockData, opts *wshrpc.RpcOpts) error {
 	_, err := sendRpcRequestCallHelper[any](w, "deletesubblock", data, opts)
@@ -481,6 +487,12 @@ func GetSecretsLinuxStorageBackendCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpt
 // command "getsecretsnames", wshserver.GetSecretsNamesCommand
 func GetSecretsNamesCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) ([]string, error) {
 	resp, err := sendRpcRequestCallHelper[[]string](w, "getsecretsnames", nil, opts)
+	return resp, err
+}
+
+// command "getsshhosts", wshserver.GetSshHostsCommand
+func GetSshHostsCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) ([]wshrpc.SshHostEntry, error) {
+	resp, err := sendRpcRequestCallHelper[[]wshrpc.SshHostEntry](w, "getsshhosts", nil, opts)
 	return resp, err
 }
 
@@ -911,6 +923,12 @@ func SetRTInfoCommand(w *wshutil.WshRpc, data wshrpc.CommandSetRTInfoData, opts 
 // command "setsecrets", wshserver.SetSecretsCommand
 func SetSecretsCommand(w *wshutil.WshRpc, data map[string]*string, opts *wshrpc.RpcOpts) error {
 	_, err := sendRpcRequestCallHelper[any](w, "setsecrets", data, opts)
+	return err
+}
+
+// command "setsshhost", wshserver.SetSshHostCommand
+func SetSshHostCommand(w *wshutil.WshRpc, data wshrpc.SshHostEntry, opts *wshrpc.RpcOpts) error {
+	_, err := sendRpcRequestCallHelper[any](w, "setsshhost", data, opts)
 	return err
 }
 

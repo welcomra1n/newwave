@@ -15,9 +15,10 @@ import { getLayoutModelForStaticTab } from "@/layout/index";
 import { atoms, createBlock, getBlockMetaKeyAtom, refocusNode, WOS } from "@/store/global";
 import { fireAndForget } from "@/util/util";
 import clsx from "clsx";
-import { atom, useAtom, useAtomValue } from "jotai";
+import { atom, useAtom, useAtomValue, useSetAtom } from "jotai";
 import { atomWithStorage } from "jotai/utils";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { ConnManagerModal, connManagerOpenAtom } from "./connmanager";
 import "./sessionsidebar.css";
 
 // Persisted across launches via localStorage (survives full reload).
@@ -577,6 +578,7 @@ const SessionSidebar = memo(() => {
     const [selected, setSelected] = useState<Set<string>>(new Set());
     const [dragOverGroup, setDragOverGroup] = useState<string | null>(null);
     const updaterStatus = useAtomValue(atoms.updaterStatusAtom);
+    const setConnOpen = useSetAtom(connManagerOpenAtom);
     const [query, setQuery] = useState("");
     // sessionids whose file *content* matches the query (title/alias match is done client-side for instant feedback)
     const [contentMatchIds, setContentMatchIds] = useState<Set<string> | null>(null);
@@ -782,7 +784,6 @@ const SessionSidebar = memo(() => {
         const hay = `${s.alias ?? ""} ${s.title ?? ""} ${s.cwd ?? ""}`.toLowerCase();
         return hay.includes(q) || (contentMatchIds?.has(s.sessionid) ?? false);
     });
-    const showPanel = !collapsed || hovering;
     const counts: Record<AgentFilter, number> = {
         all: sessions.length,
         claude: sessions.filter((s) => s.agent === "claude").length,
@@ -837,6 +838,14 @@ const SessionSidebar = memo(() => {
                     onClick={load}
                 >
                     <i className="fa fa-solid fa-rotate-right" />
+                </button>
+                <button
+                    type="button"
+                    className="text-secondary hover:text-white text-xs cursor-pointer px-1"
+                    title="SSH 커넥션"
+                    onClick={() => setConnOpen(true)}
+                >
+                    <i className="fa fa-solid fa-network-wired" />
                 </button>
                 <button
                     type="button"
@@ -1044,18 +1053,28 @@ const SessionSidebar = memo(() => {
     return (
         <div
             className="relative h-full shrink-0 select-none"
-            style={{ width: showPanel ? width : 6 }}
+            // when collapsed the expanded panel floats over the terminal (overlay), so the
+            // reserved column stays a thin strip and never pushes the layout.
+            style={{ width: collapsed ? 6 : width }}
             onMouseLeave={() => setHovering(false)}
         >
+            <ConnManagerModal />
             {collapsed && !hovering ? (
+                // wide invisible hover-catch (20px) overlaying the terminal edge, with a thin
+                // visible strip. makes the collapsed sidebar much easier to trigger.
                 <div
-                    className="h-full w-1.5 bg-modalbg border-r border-border hover:bg-accent/40 cursor-pointer transition-colors"
+                    className="absolute left-0 top-0 h-full w-5 z-50 cursor-pointer group/edge"
                     title="세션 — 마우스를 올리면 펼쳐집니다"
                     onMouseEnter={() => setHovering(true)}
-                />
+                >
+                    <div className="h-full w-1.5 bg-modalbg border-r border-border group-hover/edge:bg-accent/40 transition-colors" />
+                </div>
             ) : (
                 <div
-                    className={clsx("relative h-full border-r border-border", collapsed && "absolute left-0 top-0 z-50 shadow-2xl")}
+                    className={clsx(
+                        "relative h-full border-r border-border",
+                        collapsed && "absolute left-0 top-0 z-50 shadow-2xl session-slide-in"
+                    )}
                     style={{ width }}
                     onMouseEnter={() => collapsed && setHovering(true)}
                 >

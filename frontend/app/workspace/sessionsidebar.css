@@ -33,6 +33,22 @@
     pointer-events: none;
 }
 
+/* Collapsed sidebar: floating panel slides in from the left (mac-like ease-out). */
+@keyframes session-slide-in {
+    from {
+        transform: translateX(-100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+.session-slide-in {
+    animation: session-slide-in 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: transform, opacity;
+}
+
 /* Thin, subtle scrollbar for the session list — only shows on hover over the track. */
 .session-scroll {
     scrollbar-width: thin;
