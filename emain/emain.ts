@@ -388,6 +388,20 @@ async function appMain() {
     }
     electronApp.on("second-instance", (_event, argv, workingDirectory) => {
         console.log("second-instance event, argv:", argv, "workingDirectory:", workingDirectory);
+        // Launching again should focus the existing window, NOT spawn a duplicate.
+        // Only create a window when none exist (e.g. all were closed but the app lingered).
+        const wins = getAllWaveWindows();
+        if (wins.length > 0) {
+            const w = focusedWaveWindow ?? wins[0];
+            try {
+                if (w.isMinimized()) w.restore();
+                w.show();
+                w.focus();
+            } catch (e) {
+                console.log("second-instance focus failed", e);
+            }
+            return;
+        }
         fireAndForget(createNewWaveWindow);
     });
     try {
