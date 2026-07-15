@@ -302,7 +302,7 @@ const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => 
                 fontSize: termFontSize,
                 fontFamily: `${termSettings?.["term:fontfamily"] ?? connFontFamily ?? "D2Coding"}, "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans CJK KR", monospace`,
                 drawBoldTextInBrightColors: false,
-                fontWeight: "normal",
+                fontWeight: "bold",
                 fontWeightBold: "bold",
                 allowTransparency: true,
                 scrollback: termScrollback,
