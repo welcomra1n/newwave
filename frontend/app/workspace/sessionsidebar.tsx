@@ -145,6 +145,14 @@ function relTime(ms: number): string {
     return `${Math.floor(mon / 12)}년`;
 }
 
+// Compact cwd for the second line: keep the tail (project folder is the useful part).
+function shortCwd(cwd: string): string {
+    if (!cwd) return "";
+    const parts = cwd.replace(/\\/g, "/").split("/").filter(Boolean);
+    if (parts.length <= 2) return cwd.replace(/\\/g, "/");
+    return "…/" + parts.slice(-2).join("/");
+}
+
 // Find the open block (if any) that is running this session's resume command.
 function findOpenBlockId(sessionid: string): string | null {
     try {
@@ -461,13 +469,18 @@ const SessionItem = memo(
                         onBlur={commitRename}
                     />
                 ) : (
-                    <div
-                        className={clsx(
-                            "text-xs truncate flex-1 min-w-0 group-hover:text-white",
-                            active ? "text-white font-medium" : "text-white/90"
+                    <div className="flex-1 min-w-0">
+                        <div
+                            className={clsx(
+                                "text-xs truncate group-hover:text-white",
+                                active ? "text-white font-medium" : "text-white/90"
+                            )}
+                        >
+                            {displayName}
+                        </div>
+                        {session.cwd && (
+                            <div className="text-[10px] text-muted truncate leading-tight">{shortCwd(session.cwd)}</div>
                         )}
-                    >
-                        {displayName}
                     </div>
                 )}
                 {working ? (
@@ -480,7 +493,32 @@ const SessionItem = memo(
                         *
                     </span>
                 ) : null}
-                <span className="text-[10px] text-muted shrink-0">{relTime(session.mtime)}</span>
+                {/* hover: quick open / fork; time hides to make room */}
+                <div className="hidden group-hover:flex items-center gap-2 shrink-0">
+                    <button
+                        type="button"
+                        title="열기"
+                        className="text-accent hover:brightness-125 cursor-pointer"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            openSession(session);
+                        }}
+                    >
+                        <i className="fa fa-solid fa-arrow-right-to-bracket text-[10px]" />
+                    </button>
+                    <button
+                        type="button"
+                        title="복사본으로 열기 (fork)"
+                        className="text-accent hover:brightness-125 cursor-pointer"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            openSessionFork(session);
+                        }}
+                    >
+                        <i className="fa fa-solid fa-code-branch text-[10px]" />
+                    </button>
+                </div>
+                <span className="text-[10px] text-muted shrink-0 group-hover:hidden">{relTime(session.mtime)}</span>
             </div>
         );
     }
@@ -801,20 +839,26 @@ const SessionSidebar = memo(() => {
 
     const selectedIds = Array.from(selected);
     const renderItems = (items: CliSessionEntry[]) =>
-        items.map((s) => (
-            <SessionItem
-                key={`${s.agent}:${s.filepath}`}
-                session={s}
-                active={activeIds.has(s.sessionid)}
-                done={attention.has(s.sessionid)}
-                working={working.has(s.sessionid)}
-                projects={projects}
-                selected={selected.has(s.sessionid)}
-                selectedIds={selectedIds}
-                onToggleSelect={toggleSelect}
-                onChanged={load}
-            />
-        ));
+        items.map((s, i) => {
+            // dashed divider where pinned sessions end and regular ones begin
+            const showDivider = i > 0 && items[i - 1].pinned && !s.pinned;
+            return (
+                <div key={`${s.agent}:${s.filepath}`}>
+                    {showDivider && <div className="border-t border-dashed border-border my-1.5" />}
+                    <SessionItem
+                        session={s}
+                        active={activeIds.has(s.sessionid)}
+                        done={attention.has(s.sessionid)}
+                        working={working.has(s.sessionid)}
+                        projects={projects}
+                        selected={selected.has(s.sessionid)}
+                        selectedIds={selectedIds}
+                        onToggleSelect={toggleSelect}
+                        onChanged={load}
+                    />
+                </div>
+            );
+        });
 
     const panel = (
         <div className="flex flex-col h-full bg-modalbg overflow-hidden">
@@ -962,7 +1006,17 @@ const SessionSidebar = memo(() => {
                 ) : q && shown.length === 0 ? (
                     <div className="text-xs text-muted text-center py-4 px-2">검색 결과 없음</div>
                 ) : shown.length === 0 && projects.length === 0 ? (
-                    <div className="text-xs text-muted text-center py-4 px-2">세션 없음</div>
+                    <div className="text-xs text-muted text-center py-6 px-2">
+                        <i className="fa fa-solid fa-folder-open text-2xl opacity-40 block mb-2" />
+                        세션 없음
+                        <button
+                            type="button"
+                            className="mt-3 mx-auto flex items-center gap-1.5 text-[11px] text-accent border border-accent rounded-sm px-2.5 py-1 cursor-pointer hover:bg-accent/10 transition-colors"
+                            onClick={() => newSession("claude")}
+                        >
+                            <i className="fa fa-solid fa-plus text-[9px]" /> 새 Claude로 시작
+                        </button>
+                    </div>
                 ) : (
                     groupOrder.map((g) => {
                         const items = grouped[g] || [];
@@ -1059,32 +1113,42 @@ const SessionSidebar = memo(() => {
             onMouseLeave={() => setHovering(false)}
         >
             <ConnManagerModal />
-            {collapsed && !hovering ? (
-                // wide invisible hover-catch (20px) overlaying the terminal edge, with a thin
-                // visible strip. makes the collapsed sidebar much easier to trigger.
-                <div
-                    className="absolute left-0 top-0 h-full w-5 z-50 cursor-pointer group/edge"
-                    title="세션 — 마우스를 올리면 펼쳐집니다"
-                    onMouseEnter={() => setHovering(true)}
-                >
-                    <div className="h-full w-1.5 bg-modalbg border-r border-border group-hover/edge:bg-accent/40 transition-colors" />
-                </div>
-            ) : (
-                <div
-                    className={clsx(
-                        "relative h-full border-r border-border",
-                        collapsed && "absolute left-0 top-0 z-50 shadow-2xl session-slide-in"
-                    )}
-                    style={{ width }}
-                    onMouseEnter={() => collapsed && setHovering(true)}
-                >
+            {!collapsed ? (
+                <div className="relative h-full border-r border-border" style={{ width }}>
                     {panel}
-                    {/* resize handle — sits above everything on the right edge */}
                     <div
                         className="absolute top-0 right-0 h-full w-2 cursor-ew-resize hover:bg-accent/60 z-[60]"
                         onMouseDown={startResize}
                     />
                 </div>
+            ) : (
+                <>
+                    {/* wide invisible hover-catch (20px) with a thin visible strip */}
+                    <div
+                        className="absolute left-0 top-0 h-full w-5 z-40 cursor-pointer group/edge"
+                        title="세션 — 마우스를 올리면 펼쳐집니다"
+                        onMouseEnter={() => setHovering(true)}
+                    >
+                        <div className="h-full w-1.5 bg-modalbg border-r border-border group-hover/edge:bg-accent/40 transition-colors" />
+                    </div>
+                    {/* floating panel — always mounted, slides in AND out via transform transition */}
+                    <div
+                        className="absolute left-0 top-0 h-full z-50 shadow-2xl border-r border-border bg-modalbg"
+                        style={{
+                            width,
+                            transform: hovering ? "translateX(0)" : "translateX(-100%)",
+                            transition: "transform 0.2s cubic-bezier(0.22, 1, 0.36, 1)",
+                            pointerEvents: hovering ? "auto" : "none",
+                        }}
+                        onMouseEnter={() => setHovering(true)}
+                    >
+                        {panel}
+                        <div
+                            className="absolute top-0 right-0 h-full w-2 cursor-ew-resize hover:bg-accent/60 z-[60]"
+                            onMouseDown={startResize}
+                        />
+                    </div>
+                </>
             )}
         </div>
     );
