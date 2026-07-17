@@ -3,6 +3,7 @@
 
 import { WaveAIModel } from "@/app/aipanel/waveai-model";
 import { FocusManager } from "@/app/store/focusManager";
+import { sessionSidebarCollapsedAtom } from "@/app/workspace/sidebaratoms";
 import {
     atoms,
     createBlock,
@@ -543,6 +544,10 @@ function registerGlobalKeys() {
     });
     globalKeyMap.set("Cmd:Shift:w", () => {
         simpleCloseStaticTab();
+        return true;
+    });
+    globalKeyMap.set("Cmd:b", () => {
+        globalStore.set(sessionSidebarCollapsedAtom, (v) => !v);
         return true;
     });
     const magnifyFocused = () => {

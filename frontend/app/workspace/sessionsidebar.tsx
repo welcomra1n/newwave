@@ -16,15 +16,17 @@ import { atoms, createBlock, getBlockMetaKeyAtom, refocusNode, WOS } from "@/sto
 import { fireAndForget } from "@/util/util";
 import clsx from "clsx";
 import { atom, useAtom, useAtomValue, useSetAtom } from "jotai";
-import { atomWithStorage } from "jotai/utils";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { ConnManagerModal, connManagerOpenAtom } from "./connmanager";
+import {
+    sessionSidebarCollapsedAtom,
+    sessionSidebarVisibleAtom,
+    sessionSidebarWidthAtom,
+} from "./sidebaratoms";
 import "./sessionsidebar.css";
 
-// Persisted across launches via localStorage (survives full reload).
-export const sessionSidebarVisibleAtom = atomWithStorage("newwave:sidebar:visible", true);
-export const sessionSidebarWidthAtom = atomWithStorage("newwave:sidebar:width", 240);
-export const sessionSidebarCollapsedAtom = atomWithStorage("newwave:sidebar:collapsed", false);
+// re-export so existing importers (workspace, etc.) keep working
+export { sessionSidebarCollapsedAtom, sessionSidebarVisibleAtom, sessionSidebarWidthAtom };
 
 const SIDEBAR_MIN_W = 170;
 const SIDEBAR_MAX_W = 460;
@@ -143,6 +145,17 @@ function relTime(ms: number): string {
     const mon = Math.floor(day / 30);
     if (mon < 12) return `${mon}달`;
     return `${Math.floor(mon / 12)}년`;
+}
+
+// Time bucket for section headers (오늘 / 어제 / 이번 주 / 이전).
+function timeBucket(ms: number): string {
+    if (!ms) return "이전";
+    const now = new Date();
+    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    if (ms >= startToday) return "오늘";
+    if (ms >= startToday - 86400000) return "어제";
+    if (ms >= startToday - 6 * 86400000) return "이번 주";
+    return "이전";
 }
 
 // Compact cwd for the second line: keep the tail (project folder is the useful part).
@@ -838,13 +851,28 @@ const SessionSidebar = memo(() => {
     const groupOrder = [...projects, UNGROUPED];
 
     const selectedIds = Array.from(selected);
-    const renderItems = (items: CliSessionEntry[]) =>
-        items.map((s, i) => {
+    const renderItems = (items: CliSessionEntry[]) => {
+        let lastBucket: string | null = null;
+        return items.map((s, i) => {
             // dashed divider where pinned sessions end and regular ones begin
             const showDivider = i > 0 && items[i - 1].pinned && !s.pinned;
+            // time-bucket header (only for non-pinned, when the bucket changes)
+            let bucketLabel: string | null = null;
+            if (!s.pinned) {
+                const b = timeBucket(s.mtime);
+                if (b !== lastBucket) {
+                    bucketLabel = b;
+                    lastBucket = b;
+                }
+            }
             return (
                 <div key={`${s.agent}:${s.filepath}`}>
                     {showDivider && <div className="border-t border-dashed border-border my-1.5" />}
+                    {bucketLabel && (
+                        <div className="text-[9px] text-muted uppercase tracking-wide px-1 pt-1.5 pb-1">
+                            {bucketLabel}
+                        </div>
+                    )}
                     <SessionItem
                         session={s}
                         active={activeIds.has(s.sessionid)}
@@ -859,6 +887,7 @@ const SessionSidebar = memo(() => {
                 </div>
             );
         });
+    };
 
     const panel = (
         <div className="flex flex-col h-full bg-modalbg overflow-hidden">
@@ -1126,10 +1155,24 @@ const SessionSidebar = memo(() => {
                     {/* wide invisible hover-catch (20px) with a thin visible strip */}
                     <div
                         className="absolute left-0 top-0 h-full w-5 z-40 cursor-pointer group/edge"
-                        title="세션 — 마우스를 올리면 펼쳐집니다"
+                        title={
+                            attention.size > 0
+                                ? `${attention.size}개 세션 답변 필요 — 올려서 펼치기`
+                                : "세션 — 마우스를 올리면 펼쳐집니다"
+                        }
                         onMouseEnter={() => setHovering(true)}
                     >
                         <div className="h-full w-1.5 bg-modalbg border-r border-border group-hover/edge:bg-accent/40 transition-colors" />
+                        {/* attention/working badge so you can tell state without expanding */}
+                        {attention.size > 0 ? (
+                            <div className="absolute left-0 top-2 flex items-center justify-center w-4 h-4 rounded-full bg-accent text-black text-[9px] font-bold animate-pulse">
+                                {attention.size}
+                            </div>
+                        ) : working.size > 0 ? (
+                            <div className="absolute left-0 top-2 flex items-center justify-center w-4 h-4">
+                                <i className="fa fa-solid fa-spinner fa-spin text-accent text-[9px]" />
+                            </div>
+                        ) : null}
                     </div>
                     {/* floating panel — always mounted, slides in AND out via transform transition */}
                     <div
