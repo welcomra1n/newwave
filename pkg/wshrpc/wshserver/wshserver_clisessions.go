@@ -99,29 +99,38 @@ func (ws *WshServer) SearchCliSessionsCommand(ctx context.Context, data wshrpc.C
 			out = append(out, e)
 			continue
 		}
-		if fileContainsQuery(e.FilePath, q) {
+		if snip, ok := fileMatchSnippet(e.FilePath, q); ok {
+			e.Snippet = snip
 			out = append(out, e)
 		}
 	}
 	return out, nil
 }
 
-// fileContainsQuery scans a session file for a case-insensitive substring, bounded to keep
-// search responsive on large transcripts.
-func fileContainsQuery(filePath, lowerQuery string) bool {
+// fileMatchSnippet scans a session file for a case-insensitive substring, bounded to keep
+// search responsive. Returns the matched line (trimmed) as a preview snippet.
+func fileMatchSnippet(filePath, lowerQuery string) (string, bool) {
 	f, err := os.Open(filePath)
 	if err != nil {
-		return false
+		return "", false
 	}
 	defer f.Close()
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 	for i := 0; i < cliSessionsSearchLines && sc.Scan(); i++ {
-		if strings.Contains(strings.ToLower(sc.Text()), lowerQuery) {
-			return true
+		line := sc.Text()
+		idx := strings.Index(strings.ToLower(line), lowerQuery)
+		if idx < 0 {
+			continue
 		}
+		// window a snippet around the match, cleaned to one line
+		snippet := cleanTitle(line)
+		if r := []rune(snippet); len(r) > 120 {
+			snippet = string(r[:120]) + "…"
+		}
+		return snippet, true
 	}
-	return false
+	return "", false
 }
 
 // --- user metadata (alias/pin) store: ~/.newwave/sessions-meta.json ---

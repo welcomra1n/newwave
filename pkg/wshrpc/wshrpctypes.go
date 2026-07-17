@@ -40,6 +40,7 @@ type CliSessionEntry struct {
 	Pinned    bool   `json:"pinned"`    // user-pinned to top
 	Color     string `json:"color"`     // user-set accent color (hex), shown in sidebar + header
 	Project   string `json:"project"`   // user-assigned project group name ("" = ungrouped)
+	Snippet   string `json:"snippet"`   // matched content line (only set by search)
 }
 
 // CliBulkProjectReq assigns many sessions to a folder in one atomic write.

@@ -229,6 +229,7 @@ declare global {
         pinned: boolean;
         color: string;
         project: string;
+        snippet: string;
     };
 
     // wshrpc.CliSessionMetaReq

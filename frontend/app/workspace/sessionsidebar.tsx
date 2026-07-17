@@ -308,6 +308,8 @@ const SessionItem = memo(
         active,
         done,
         working,
+        highlighted,
+        searchSnippet,
         projects,
         selected,
         selectedIds,
@@ -318,6 +320,8 @@ const SessionItem = memo(
         active: boolean;
         done: boolean;
         working: boolean;
+        highlighted: boolean;
+        searchSnippet?: string;
         projects: string[];
         selected: boolean;
         selectedIds: string[];
@@ -444,7 +448,8 @@ const SessionItem = memo(
                 className={clsx(
                     "flex items-center gap-1.5 px-2 py-1.5 rounded-md cursor-pointer group overflow-hidden bg-white/[0.035] hover:bg-white/[0.08] transition-colors duration-150",
                     active ? "border-2 session-active-radar" : "border border-white/10 hover:border-white/20",
-                    selected && "ring-2 ring-accent ring-inset"
+                    selected && "ring-2 ring-accent ring-inset",
+                    highlighted && !selected && "ring-1 ring-accent/70 ring-inset bg-accent/10"
                 )}
                 style={
                     active
@@ -491,8 +496,17 @@ const SessionItem = memo(
                         >
                             {displayName}
                         </div>
-                        {session.cwd && (
-                            <div className="text-[10px] text-muted truncate leading-tight">{shortCwd(session.cwd)}</div>
+                        {searchSnippet ? (
+                            <div className="text-[10px] text-accent/80 truncate leading-tight" title={searchSnippet}>
+                                <i className="fa fa-solid fa-magnifying-glass text-[8px] mr-1 opacity-70" />
+                                {searchSnippet}
+                            </div>
+                        ) : (
+                            session.cwd && (
+                                <div className="text-[10px] text-muted truncate leading-tight">
+                                    {shortCwd(session.cwd)}
+                                </div>
+                            )
                         )}
                     </div>
                 )}
@@ -632,7 +646,10 @@ const SessionSidebar = memo(() => {
     const setConnOpen = useSetAtom(connManagerOpenAtom);
     const [query, setQuery] = useState("");
     // sessionids whose file *content* matches the query (title/alias match is done client-side for instant feedback)
-    const [contentMatchIds, setContentMatchIds] = useState<Set<string> | null>(null);
+    // sessionid -> matched content snippet (null = no active content search)
+    const [contentMatches, setContentMatches] = useState<Map<string, string> | null>(null);
+    // keyboard navigation index into the flat `shown` list (-1 = none)
+    const [navIdx, setNavIdx] = useState(-1);
 
     const toggleSelect = useCallback((sessionid: string) => {
         setSelected((prev) => {
@@ -671,7 +688,7 @@ const SessionSidebar = memo(() => {
     useEffect(() => {
         const q = query.trim();
         if (!q) {
-            setContentMatchIds(null);
+            setContentMatches(null);
             return;
         }
         let cancelled = false;
@@ -679,10 +696,10 @@ const SessionSidebar = memo(() => {
             fireAndForget(async () => {
                 try {
                     const res = await RpcApi.SearchCliSessionsCommand(TabRpcClient, { query: q });
-                    if (!cancelled) setContentMatchIds(new Set((res ?? []).map((s) => s.sessionid)));
+                    if (!cancelled) setContentMatches(new Map((res ?? []).map((s) => [s.sessionid, s.snippet])));
                 } catch (e) {
                     console.error("SearchCliSessions failed", e);
-                    if (!cancelled) setContentMatchIds(new Set());
+                    if (!cancelled) setContentMatches(new Map());
                 }
             });
         }, 200);
@@ -833,7 +850,7 @@ const SessionSidebar = memo(() => {
         if (!q) return true;
         // instant title/alias/cwd match, plus backend content match (fills in after debounce)
         const hay = `${s.alias ?? ""} ${s.title ?? ""} ${s.cwd ?? ""}`.toLowerCase();
-        return hay.includes(q) || (contentMatchIds?.has(s.sessionid) ?? false);
+        return hay.includes(q) || (contentMatches?.has(s.sessionid) ?? false);
     });
     const counts: Record<AgentFilter, number> = {
         all: sessions.length,
@@ -878,6 +895,8 @@ const SessionSidebar = memo(() => {
                         active={activeIds.has(s.sessionid)}
                         done={attention.has(s.sessionid)}
                         working={working.has(s.sessionid)}
+                        highlighted={navIdx >= 0 && shown[navIdx]?.sessionid === s.sessionid}
+                        searchSnippet={contentMatches?.get(s.sessionid) || undefined}
                         projects={projects}
                         selected={selected.has(s.sessionid)}
                         selectedIds={selectedIds}
@@ -959,10 +978,23 @@ const SessionSidebar = memo(() => {
                         placeholder="세션 검색 (제목·내용)"
                         className="text-xs bg-black/40 text-white rounded-sm pl-6 pr-6 py-1 w-full outline-none border border-border focus:border-accent"
                         value={query}
-                        onChange={(e) => setQuery(e.target.value)}
+                        onChange={(e) => {
+                            setQuery(e.target.value);
+                            setNavIdx(-1);
+                        }}
                         onKeyDown={(e) => {
-                            if (e.key === "Escape") setQuery("");
-                            else if (e.key === "Enter" && shown.length > 0) openSession(shown[0]);
+                            if (e.key === "Escape") {
+                                setQuery("");
+                                setNavIdx(-1);
+                            } else if (e.key === "ArrowDown") {
+                                e.preventDefault();
+                                setNavIdx((i) => Math.min(i + 1, shown.length - 1));
+                            } else if (e.key === "ArrowUp") {
+                                e.preventDefault();
+                                setNavIdx((i) => Math.max(i - 1, 0));
+                            } else if (e.key === "Enter" && shown.length > 0) {
+                                openSession(shown[navIdx >= 0 ? navIdx : 0]);
+                            }
                         }}
                     />
                     {query && (
