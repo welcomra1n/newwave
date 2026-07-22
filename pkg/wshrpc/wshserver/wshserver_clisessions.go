@@ -11,9 +11,11 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/wavetermdev/waveterm/pkg/wshrpc"
 )
@@ -79,6 +81,32 @@ func (ws *WshServer) GetCliSessionsCommand(ctx context.Context) ([]wshrpc.CliSes
 		return entries[i].Mtime > entries[j].Mtime
 	})
 	return entries, nil
+}
+
+// GetLiveSessionsCommand returns session ids that are currently running as claude
+// agents (interactive or background), so the UI can mark them "running" and warn
+// before a resume that would be refused.
+func (ws *WshServer) GetLiveSessionsCommand(ctx context.Context) ([]string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "claude", "agents", "--json").Output()
+	if err != nil {
+		// claude not on PATH or no agents — non-fatal, just report none
+		return []string{}, nil
+	}
+	var agents []struct {
+		SessionId string `json:"sessionId"`
+	}
+	if err := json.Unmarshal(out, &agents); err != nil {
+		return []string{}, nil
+	}
+	ids := make([]string, 0, len(agents))
+	for _, a := range agents {
+		if a.SessionId != "" {
+			ids = append(ids, a.SessionId)
+		}
+	}
+	return ids, nil
 }
 
 // SearchCliSessionsCommand returns sessions whose title/alias or file content matches the query.

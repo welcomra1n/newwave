@@ -310,6 +310,8 @@ const SessionItem = memo(
         working,
         highlighted,
         searchSnippet,
+        live,
+        onLiveClick,
         projects,
         selected,
         selectedIds,
@@ -322,6 +324,8 @@ const SessionItem = memo(
         working: boolean;
         highlighted: boolean;
         searchSnippet?: string;
+        live: boolean;
+        onLiveClick: (s: CliSessionEntry) => void;
         projects: string[];
         selected: boolean;
         selectedIds: string[];
@@ -466,6 +470,12 @@ const SessionItem = memo(
                         onToggleSelect(session.sessionid);
                         return;
                     }
+                    // running elsewhere (live agent) and not open here -> notify instead of
+                    // spawning a resume that would be refused.
+                    if (live && !active) {
+                        onLiveClick(session);
+                        return;
+                    }
                     openSession(session);
                 }}
                 onContextMenu={onContextMenu}
@@ -509,6 +519,14 @@ const SessionItem = memo(
                             )
                         )}
                     </div>
+                )}
+                {live && !active && (
+                    <span
+                        className="shrink-0 text-[9px] text-amber-400 border border-amber-400/50 rounded-sm px-1 leading-tight"
+                        title="다른 곳에서 실행 중 — 클릭하면 안내"
+                    >
+                        실행중
+                    </span>
                 )}
                 {working ? (
                     <i className="fa fa-solid fa-spinner fa-spin text-[10px] text-accent shrink-0" title="작업 중" />
@@ -650,6 +668,10 @@ const SessionSidebar = memo(() => {
     const [contentMatches, setContentMatches] = useState<Map<string, string> | null>(null);
     // keyboard navigation index into the flat `shown` list (-1 = none)
     const [navIdx, setNavIdx] = useState(-1);
+    // sessionids currently live as claude agents (interactive/background)
+    const [liveIds, setLiveIds] = useState<Set<string>>(new Set());
+    // transient notice banner (e.g. clicking an already-running session)
+    const [notice, setNotice] = useState("");
 
     const toggleSelect = useCallback((sessionid: string) => {
         setSelected((prev) => {
@@ -682,6 +704,34 @@ const SessionSidebar = memo(() => {
     useEffect(() => {
         load();
     }, [load, listVersion]);
+
+    // Poll which sessions are currently running as claude agents, to mark them "실행 중"
+    // and warn before a resume that would be refused.
+    useEffect(() => {
+        let cancelled = false;
+        const poll = () =>
+            fireAndForget(async () => {
+                try {
+                    const ids = await RpcApi.GetLiveSessionsCommand(TabRpcClient);
+                    if (!cancelled) setLiveIds(new Set(ids ?? []));
+                } catch {
+                    // non-fatal
+                }
+            });
+        poll();
+        const t = setInterval(poll, 15000);
+        return () => {
+            cancelled = true;
+            clearInterval(t);
+        };
+    }, [listVersion]);
+
+    // auto-dismiss the notice banner
+    useEffect(() => {
+        if (!notice) return;
+        const t = setTimeout(() => setNotice(""), 4000);
+        return () => clearTimeout(t);
+    }, [notice]);
 
     // Debounced content search: title/alias matching is instant (client-side in `shown`);
     // this fills in sessions that match only by transcript content.
@@ -897,6 +947,12 @@ const SessionSidebar = memo(() => {
                         working={working.has(s.sessionid)}
                         highlighted={navIdx >= 0 && shown[navIdx]?.sessionid === s.sessionid}
                         searchSnippet={contentMatches?.get(s.sessionid) || undefined}
+                        live={liveIds.has(s.sessionid)}
+                        onLiveClick={(sess) =>
+                            setNotice(
+                                `"${sess.alias || sess.title || "세션"}"은(는) 이미 실행 중입니다. 우클릭 → 복사본으로 열기(fork)로 별도 사본을 열 수 있어요.`
+                            )
+                        }
                         projects={projects}
                         selected={selected.has(s.sessionid)}
                         selectedIds={selectedIds}
@@ -1056,6 +1112,19 @@ const SessionSidebar = memo(() => {
                         onClick={() => setSelected(new Set())}
                     >
                         해제
+                    </button>
+                </div>
+            )}
+            {notice && (
+                <div className="flex items-start gap-2 px-2 py-1.5 border-b border-border bg-amber-400/10 text-[11px] text-amber-200">
+                    <i className="fa fa-solid fa-circle-info mt-0.5 shrink-0" />
+                    <span className="flex-1">{notice}</span>
+                    <button
+                        type="button"
+                        className="text-amber-200/70 hover:text-white cursor-pointer shrink-0"
+                        onClick={() => setNotice("")}
+                    >
+                        <i className="fa fa-solid fa-xmark" />
                     </button>
                 </div>
             )}

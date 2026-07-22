@@ -124,6 +124,7 @@ type WshRpcInterface interface {
 	SetConnectionsConfigCommand(ctx context.Context, data ConnConfigRequest) error
 	GetFullConfigCommand(ctx context.Context) (wconfig.FullConfigType, error)
 	GetCliSessionsCommand(ctx context.Context) ([]CliSessionEntry, error)
+	GetLiveSessionsCommand(ctx context.Context) ([]string, error)
 	SearchCliSessionsCommand(ctx context.Context, data CliSessionSearchReq) ([]CliSessionEntry, error)
 	SetCliSessionMetaCommand(ctx context.Context, data CliSessionMetaReq) error
 	SetCliSessionsProjectCommand(ctx context.Context, data CliBulkProjectReq) error

@@ -462,6 +462,12 @@ export class RpcApiType {
         return client.wshRpcCall("getjwtpublickey", null, opts);
     }
 
+    // command "getlivesessions" [call]
+    GetLiveSessionsCommand(client: WshClient, opts?: RpcOpts): Promise<string[]> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "getlivesessions", null, opts);
+        return client.wshRpcCall("getlivesessions", null, opts);
+    }
+
     // command "getmeta" [call]
     GetMetaCommand(client: WshClient, data: CommandGetMetaData, opts?: RpcOpts): Promise<MetaType> {
         if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "getmeta", data, opts);
