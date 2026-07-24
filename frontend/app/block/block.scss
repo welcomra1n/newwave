@@ -403,7 +403,8 @@
             left: 0;
             right: 0;
             bottom: 0;
-            border: 2px solid transparent;
+            // unfocused blocks still get a dark grey outline so panes stay visually separated
+            border: 2px solid rgba(255, 255, 255, 0.13);
             pointer-events: none;
             padding: 2px;
             border-radius: var(--block-border-radius);
