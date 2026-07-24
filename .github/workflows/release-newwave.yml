@@ -55,7 +55,10 @@ jobs:
           echo "$(pwd -W)/zig-x86_64-windows-${ZIG_VER}" >> "$GITHUB_PATH"
 
       - name: Install deps
-        run: npm install
+        # Root + tsunami/frontend only. The `docs` workspace pulls @docusaurus/plugin-ideal-image
+        # → sharp, whose native build fails on the Windows runner (node-gyp). Docs aren't part
+        # of `task package`, so skip that workspace entirely.
+        run: npm install -w tsunami/frontend --include-workspace-root
 
       - name: Build and publish
         env:
