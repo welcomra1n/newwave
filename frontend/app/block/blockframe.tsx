@@ -17,6 +17,7 @@ import { makeORef } from "@/store/wos";
 import * as util from "@/util/util";
 import { makeIconClass } from "@/util/util";
 import { computeBgStyleFromMeta } from "@/util/waveutil";
+import { clearSessionAttention, parseResumeId, sessionAttentionAtom } from "@/app/workspace/sidebaratoms";
 import clsx from "clsx";
 import * as jotai from "jotai";
 import * as React from "react";
@@ -118,6 +119,19 @@ const BlockFrame_Default_Component = (props: BlockFrameProps) => {
     const connName = jotai.useAtomValue(waveEnv.getBlockMetaKeyAtom(nodeModel.blockId, "connection"));
     const iconColor = jotai.useAtomValue(waveEnv.getBlockMetaKeyAtom(nodeModel.blockId, "icon:color"));
     const noHeader = util.useAtomValueSafe(viewModel?.noHeader);
+    // "waiting on you": this block runs a CLI session whose agent finished its turn.
+    const blockCmd = jotai.useAtomValue(waveEnv.getBlockMetaKeyAtom(nodeModel.blockId, "cmd")) as string;
+    const sessionAttention = jotai.useAtomValue(sessionAttentionAtom);
+    const awaitingResponse = React.useMemo(() => {
+        const sid = parseResumeId(blockCmd);
+        return !!sid && sessionAttention.has(sid);
+    }, [blockCmd, sessionAttention]);
+    // focusing the block = acknowledged; drop the alert (glow + sidebar marker)
+    React.useEffect(() => {
+        if (!isFocused || !awaitingResponse) return;
+        const sid = parseResumeId(blockCmd);
+        if (sid) clearSessionAttention(sid);
+    }, [isFocused, awaitingResponse, blockCmd]);
 
     React.useEffect(() => {
         if (!manageConnection) {
@@ -173,6 +187,7 @@ const BlockFrame_Default_Component = (props: BlockFrameProps) => {
                 "block-no-highlight": numBlocksInTab === 1 && !aiPanelVisible,
                 ephemeral: isEphemeral,
                 magnified: isMagnified,
+                "block-awaiting-response": awaitingResponse && !isFocused,
             })}
             data-blockid={nodeModel.blockId}
             onClick={blockModel?.onClick}

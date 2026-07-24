@@ -446,3 +446,24 @@
         }
     }
 }
+
+/* A CLI session block whose agent finished its turn and is waiting on the user:
+   soft green glow that breathes, so it's obvious across a grid of blocks. */
+@keyframes block-awaiting-pulse {
+    0%,
+    100% {
+        box-shadow:
+            0 0 0 1px rgba(51, 255, 51, 0.55),
+            0 0 12px -2px rgba(51, 255, 51, 0.5);
+    }
+    50% {
+        box-shadow:
+            0 0 0 2px rgba(51, 255, 51, 0.95),
+            0 0 26px -2px rgba(51, 255, 51, 0.85);
+    }
+}
+
+.block.block-awaiting-response {
+    animation: block-awaiting-pulse 1.6s ease-in-out infinite;
+    border-radius: var(--block-border-radius, 6px);
+}

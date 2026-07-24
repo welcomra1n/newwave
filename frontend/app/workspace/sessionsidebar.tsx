@@ -19,14 +19,31 @@ import { atom, useAtom, useAtomValue, useSetAtom } from "jotai";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { ConnManagerModal, connManagerOpenAtom } from "./connmanager";
 import {
+    clearSessionAttention,
+    clearSessionWorking,
+    markSessionAttention,
+    markSessionWorking,
+    parseResumeId,
+    sessionAttentionAtom,
     sessionSidebarCollapsedAtom,
     sessionSidebarVisibleAtom,
     sessionSidebarWidthAtom,
+    sessionWorkingAtom,
 } from "./sidebaratoms";
 import "./sessionsidebar.css";
 
-// re-export so existing importers (workspace, etc.) keep working
-export { sessionSidebarCollapsedAtom, sessionSidebarVisibleAtom, sessionSidebarWidthAtom };
+// re-export so existing importers (workspace, termwrap, etc.) keep working
+export {
+    clearSessionAttention,
+    clearSessionWorking,
+    markSessionAttention,
+    markSessionWorking,
+    sessionAttentionAtom,
+    sessionSidebarCollapsedAtom,
+    sessionSidebarVisibleAtom,
+    sessionSidebarWidthAtom,
+    sessionWorkingAtom,
+};
 
 const SIDEBAR_MIN_W = 170;
 const SIDEBAR_MAX_W = 460;
@@ -36,40 +53,6 @@ const SIDEBAR_MAX_W = 460;
 export const sessionListVersionAtom = atom(0);
 export function bumpSessionList() {
     globalStore.set(sessionListVersionAtom, (v) => v + 1);
-}
-
-// Session ids whose agent finished a turn (terminal bell) and want attention.
-export const sessionAttentionAtom = atom<Set<string>>(new Set<string>());
-export function markSessionAttention(sessionid: string) {
-    const cur = globalStore.get(sessionAttentionAtom);
-    if (!sessionid || cur.has(sessionid)) return;
-    const next = new Set(cur);
-    next.add(sessionid);
-    globalStore.set(sessionAttentionAtom, next);
-}
-export function clearSessionAttention(sessionid: string) {
-    const cur = globalStore.get(sessionAttentionAtom);
-    if (!cur.has(sessionid)) return;
-    const next = new Set(cur);
-    next.delete(sessionid);
-    globalStore.set(sessionAttentionAtom, next);
-}
-
-// Session ids whose agent is actively producing output (working right now).
-export const sessionWorkingAtom = atom<Set<string>>(new Set<string>());
-export function markSessionWorking(sessionid: string) {
-    const cur = globalStore.get(sessionWorkingAtom);
-    if (!sessionid || cur.has(sessionid)) return;
-    const next = new Set(cur);
-    next.add(sessionid);
-    globalStore.set(sessionWorkingAtom, next);
-}
-export function clearSessionWorking(sessionid: string) {
-    const cur = globalStore.get(sessionWorkingAtom);
-    if (!cur.has(sessionid)) return;
-    const next = new Set(cur);
-    next.delete(sessionid);
-    globalStore.set(sessionWorkingAtom, next);
 }
 
 // Short two-note "done" chime via Web Audio (no asset needed).
@@ -103,13 +86,6 @@ export function playDoneSound() {
 }
 
 type AgentFilter = "all" | "claude" | "codex";
-
-// Pull the resume session id out of a block's cmd, e.g. "claude --resume <id>".
-function parseResumeId(cmd: string | undefined): string | null {
-    if (!cmd) return null;
-    const m = cmd.match(/(?:--resume|resume)\s+(\S+)/);
-    return m ? m[1] : null;
-}
 
 // Session ids currently open as blocks in the active tab (reactive).
 const activeSessionIdsAtom = atom((get): Set<string> => {
