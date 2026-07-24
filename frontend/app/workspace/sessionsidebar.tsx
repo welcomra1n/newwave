@@ -279,6 +279,47 @@ const SESSION_COLORS: { label: string; value: string }[] = [
     { label: "회색", value: "#4b5563" },
 ];
 
+// Session status shown as a fixed-width capsule. Color encodes STATE (green=open,
+// blue=working, amber=waiting/running-elsewhere, grey=closed) — separate from the
+// session's own identity color (shown as the left bar).
+const StatusCapsule = memo(
+    ({ active, working, done, live }: { active: boolean; working: boolean; done: boolean; live: boolean }) => {
+        if (active && working)
+            return (
+                <span className="baw-cap cap-work" title="작업 중">
+                    <i className="fa fa-solid fa-spinner fa-spin" />
+                    작업
+                </span>
+            );
+        if (active && done)
+            return (
+                <span className="baw-cap cap-wait" title="응답 대기">
+                    <i className="fa fa-solid fa-pause" />
+                    대기
+                </span>
+            );
+        if (active)
+            return (
+                <span className="baw-cap cap-open" title="열림">
+                    <span className="dot" />
+                    열림
+                </span>
+            );
+        if (live)
+            return (
+                <span className="baw-cap cap-run" title="다른 곳에서 실행 중">
+                    실행중
+                </span>
+            );
+        return (
+            <span className="baw-cap cap-closed" title="닫힘">
+                닫힘
+            </span>
+        );
+    }
+);
+StatusCapsule.displayName = "StatusCapsule";
+
 const SessionItem = memo(
     ({
         session,
@@ -427,20 +468,12 @@ const SessionItem = memo(
                     e.dataTransfer.effectAllowed = "move";
                 }}
                 className={clsx(
-                    "flex items-center gap-1.5 px-2 py-1.5 rounded-md cursor-pointer group overflow-hidden bg-white/[0.035] hover:bg-white/[0.08] transition-colors duration-150",
-                    active ? "border-2 session-active-radar" : "border border-white/10 hover:border-white/20",
+                    "relative flex items-center gap-1.5 pl-2.5 pr-2 py-1.5 rounded-md cursor-pointer group overflow-hidden bg-white/[0.035] hover:bg-white/[0.08] transition-colors duration-150",
+                    active ? "border border-white/15" : "border border-white/10 hover:border-white/20",
                     selected && "ring-2 ring-accent ring-inset",
-                    highlighted && !selected && "ring-1 ring-accent/70 ring-inset bg-accent/10"
+                    highlighted && !selected && "ring-1 ring-accent/70 ring-inset bg-accent/10",
+                    active && done && "session-wait-row"
                 )}
-                style={
-                    active
-                        ? ({
-                              borderColor: session.color || "var(--color-accent)",
-                              boxShadow: `0 0 7px -1px ${session.color || "var(--color-accent)"}`,
-                              "--sweep-color": `color-mix(in srgb, ${session.color || "var(--color-accent)"} 32%, transparent)`,
-                          } as React.CSSProperties)
-                        : undefined
-                }
                 onClick={(e) => {
                     if (editing) return;
                     if (e.ctrlKey || e.metaKey) {
@@ -458,6 +491,13 @@ const SessionItem = memo(
                 onContextMenu={onContextMenu}
                 title={`${session.cwd}\n${session.sessionid}${active ? "\n(열림)" : ""}`}
             >
+                {/* left bar = session identity color (only when the user assigned one) */}
+                {session.color && (
+                    <span
+                        className="absolute left-0 top-0 bottom-0 w-[3px]"
+                        style={{ background: session.color }}
+                    />
+                )}
                 {session.pinned && <i className="fa fa-solid fa-thumbtack text-[9px] text-accent shrink-0" />}
                 <AgentIcon agent={session.agent} />
                 {editing ? (
@@ -497,26 +537,14 @@ const SessionItem = memo(
                         )}
                     </div>
                 )}
-                {live && !active && (
-                    <span
-                        className="shrink-0 text-[9px] text-amber-400 border border-amber-400/50 rounded-sm px-1 leading-tight"
-                        title="다른 곳에서 실행 중 — 클릭하면 안내"
-                    >
-                        실행중
-                    </span>
-                )}
-                {working ? (
-                    <i className="fa fa-solid fa-spinner fa-spin text-[10px] text-accent shrink-0" title="작업 중" />
-                ) : done ? (
-                    <span
-                        className="text-accent font-bold text-sm leading-none shrink-0 animate-pulse"
-                        title="답변 필요"
-                    >
-                        *
-                    </span>
-                ) : null}
-                {/* hover: quick open / fork; time hides to make room */}
-                <div className="hidden group-hover:flex items-center gap-2 shrink-0">
+                {/* fixed-width status column so the row never shifts as the state changes */}
+                <div className="w-[54px] shrink-0 flex justify-start">
+                    <StatusCapsule active={active} working={working} done={done} live={live} />
+                </div>
+                {/* fixed-width time column */}
+                <span className="w-[34px] shrink-0 text-right text-[10px] text-muted">{relTime(session.mtime)}</span>
+                {/* hover quick actions — absolute overlay so it doesn't reflow the columns */}
+                <div className="hidden group-hover:flex items-center gap-2.5 absolute right-1.5 top-1/2 -translate-y-1/2 bg-black/75 px-2 py-1 rounded-md">
                     <button
                         type="button"
                         title="열기"
@@ -526,7 +554,7 @@ const SessionItem = memo(
                             openSession(session);
                         }}
                     >
-                        <i className="fa fa-solid fa-arrow-right-to-bracket text-[10px]" />
+                        <i className="fa fa-solid fa-arrow-right-to-bracket text-[11px]" />
                     </button>
                     <button
                         type="button"
@@ -537,10 +565,9 @@ const SessionItem = memo(
                             openSessionFork(session);
                         }}
                     >
-                        <i className="fa fa-solid fa-code-branch text-[10px]" />
+                        <i className="fa fa-solid fa-code-branch text-[11px]" />
                     </button>
                 </div>
-                <span className="text-[10px] text-muted shrink-0 group-hover:hidden">{relTime(session.mtime)}</span>
             </div>
         );
     }
