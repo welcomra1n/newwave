@@ -49,6 +49,11 @@ export function clearSessionWorking(sessionid: string) {
     globalStore.set(sessionWorkingAtom, next);
 }
 
+// sessionid -> lightweight info, published by the sidebar so blocks can label
+// their awaiting-response overlay with what the session was about.
+export type SessionBrief = { title: string; alias: string; cwd: string; mtime: number };
+export const sessionInfoAtom = atom<Map<string, SessionBrief>>(new Map<string, SessionBrief>());
+
 // Pull the resume session id out of a block's cmd, e.g. "claude --resume <id>".
 export function parseResumeId(cmd: string | undefined): string | null {
     if (!cmd) return null;

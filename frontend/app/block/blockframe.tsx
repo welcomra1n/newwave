@@ -17,7 +17,12 @@ import { makeORef } from "@/store/wos";
 import * as util from "@/util/util";
 import { makeIconClass } from "@/util/util";
 import { computeBgStyleFromMeta } from "@/util/waveutil";
-import { clearSessionAttention, parseResumeId, sessionAttentionAtom } from "@/app/workspace/sidebaratoms";
+import {
+    clearSessionAttention,
+    parseResumeId,
+    sessionAttentionAtom,
+    sessionInfoAtom,
+} from "@/app/workspace/sidebaratoms";
 import clsx from "clsx";
 import * as jotai from "jotai";
 import * as React from "react";
@@ -122,10 +127,20 @@ const BlockFrame_Default_Component = (props: BlockFrameProps) => {
     // "waiting on you": this block runs a CLI session whose agent finished its turn.
     const blockCmd = jotai.useAtomValue(waveEnv.getBlockMetaKeyAtom(nodeModel.blockId, "cmd")) as string;
     const sessionAttention = jotai.useAtomValue(sessionAttentionAtom);
+    const sessionInfo = jotai.useAtomValue(sessionInfoAtom);
+    // session's custom color (set from the sidebar) — drives the awaiting overlay tint
+    const sessionColor = jotai.useAtomValue(
+        waveEnv.getBlockMetaKeyAtom(nodeModel.blockId, "frame:text:bg")
+    ) as string;
     const awaitingResponse = React.useMemo(() => {
         const sid = parseResumeId(blockCmd);
         return !!sid && sessionAttention.has(sid);
     }, [blockCmd, sessionAttention]);
+    // brief info (custom name / title) to label the overlay
+    const awaitingInfo = React.useMemo(() => {
+        const sid = parseResumeId(blockCmd);
+        return sid ? sessionInfo.get(sid) : undefined;
+    }, [blockCmd, sessionInfo]);
     // focusing the block = acknowledged; drop the alert (glow + sidebar marker)
     React.useEffect(() => {
         if (!isFocused || !awaitingResponse) return;
@@ -214,6 +229,18 @@ const BlockFrame_Default_Component = (props: BlockFrameProps) => {
                 {noHeader || <ErrorBoundary fallback={headerElemNoView}>{headerElem}</ErrorBoundary>}
                 {preview ? previewElem : children}
             </div>
+            {awaitingResponse && (
+                <div
+                    className="block-awaiting-overlay"
+                    style={{ "--awaiting-color": sessionColor || "#33ff33" } as React.CSSProperties}
+                >
+                    <div className="block-awaiting-label">
+                        <div className="baw-title">{awaitingInfo?.alias || awaitingInfo?.title || "세션"}</div>
+                        <div className="baw-sub">응답 대기 중</div>
+                        {awaitingInfo?.cwd && <div className="baw-cwd">{awaitingInfo.cwd}</div>}
+                    </div>
+                </div>
+            )}
             {preview || viewModel == null || !connModalOpen ? null : (
                 <ChangeConnectionBlockModal
                     blockId={nodeModel.blockId}

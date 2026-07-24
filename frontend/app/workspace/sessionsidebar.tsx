@@ -25,6 +25,7 @@ import {
     markSessionWorking,
     parseResumeId,
     sessionAttentionAtom,
+    sessionInfoAtom,
     sessionSidebarCollapsedAtom,
     sessionSidebarVisibleAtom,
     sessionSidebarWidthAtom,
@@ -668,6 +669,16 @@ const SessionSidebar = memo(() => {
                 ]);
                 setSessions(list ?? []);
                 setProjects(projs ?? []);
+                // publish brief info so blocks can label their awaiting-response overlay
+                globalStore.set(
+                    sessionInfoAtom,
+                    new Map(
+                        (list ?? []).map((s) => [
+                            s.sessionid,
+                            { title: s.title, alias: s.alias, cwd: s.cwd, mtime: s.mtime },
+                        ])
+                    )
+                );
             } catch (e) {
                 console.error("GetCliSessions failed", e);
                 setSessions([]);
