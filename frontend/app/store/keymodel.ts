@@ -546,10 +546,14 @@ function registerGlobalKeys() {
         simpleCloseStaticTab();
         return true;
     });
-    globalKeyMap.set("Cmd:b", () => {
+    const toggleSessionSidebar = () => {
         globalStore.set(sessionSidebarCollapsedAtom, (v) => !v);
         return true;
-    });
+    };
+    globalKeyMap.set("Cmd:b", toggleSessionSidebar);
+    // Cmd/Ctrl + backtick — VSCode-style panel toggle (plain ` can't be used: the
+    // terminal captures printable keys, and it'd break typing backticks in the shell).
+    globalKeyMap.set("Cmd:`", toggleSessionSidebar);
     const magnifyFocused = () => {
         const layoutModel = getLayoutModelForStaticTab();
         const focusedNode = globalStore.get(layoutModel.focusedNode);
