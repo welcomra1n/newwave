@@ -35,6 +35,7 @@
     "term:osc52": "always",
     "term:cursor": "block",
     "term:cursorblink": false,
+    "term:disablewebgl": true,
     "term:copyonselect": true,
     "term:trimtrailingwhitespace": true,
     "term:durable": false,
