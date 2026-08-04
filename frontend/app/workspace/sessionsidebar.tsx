@@ -396,6 +396,18 @@ const SessionItem = memo(
             });
         }, [session.filepath, session.sessionid, onChanged]);
 
+        // stop a stale/running background agent for this session (clears "실행중")
+        const doKill = useCallback(() => {
+            fireAndForget(async () => {
+                try {
+                    await RpcApi.KillLiveSessionCommand(TabRpcClient, session.sessionid);
+                } catch (e) {
+                    console.error("KillLiveSession failed", e);
+                }
+                bumpSessionList();
+            });
+        }, [session.sessionid]);
+
         const setProject = useCallback(
             (p: string) => {
                 fireAndForget(async () => {
@@ -442,6 +454,7 @@ const SessionItem = memo(
                     { label: "색상", submenu: colorMenu },
                     { label: "폴더로 이동", submenu: projectMenu },
                     { type: "separator" },
+                    ...(live ? [{ label: "세션 종료 (실행 중지)", click: doKill }] : []),
                     { label: "삭제 (휴지통)", click: doDelete },
                 ];
                 ContextMenuModel.getInstance().showContextMenu(menu, e);
@@ -454,6 +467,8 @@ const SessionItem = memo(
                 startRename,
                 togglePin,
                 doDelete,
+                doKill,
+                live,
                 setProject,
                 setColor,
             ]
@@ -964,7 +979,7 @@ const SessionSidebar = memo(() => {
                         live={liveIds.has(s.sessionid)}
                         onLiveClick={(sess) =>
                             setNotice(
-                                `"${sess.alias || sess.title || "세션"}"은(는) 이미 실행 중입니다. 우클릭 → 복사본으로 열기(fork)로 별도 사본을 열 수 있어요.`
+                                `"${sess.alias || sess.title || "세션"}"은(는) 이미 실행 중입니다. 우클릭 → 세션 종료로 정리하거나, 복사본으로 열기(fork)로 별도 사본을 열 수 있어요.`
                             )
                         }
                         projects={projects}

@@ -636,6 +636,12 @@ export class RpcApiType {
         return client.wshRpcCall("jobstartstream", data, opts);
     }
 
+    // command "killlivesession" [call]
+    KillLiveSessionCommand(client: WshClient, data: string, opts?: RpcOpts): Promise<void> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "killlivesession", data, opts);
+        return client.wshRpcCall("killlivesession", data, opts);
+    }
+
     // command "listallappfiles" [call]
     ListAllAppFilesCommand(client: WshClient, data: CommandListAllAppFilesData, opts?: RpcOpts): Promise<CommandListAllAppFilesRtnData> {
         if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "listallappfiles", data, opts);

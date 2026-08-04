@@ -10,6 +10,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -107,6 +108,39 @@ func (ws *WshServer) GetLiveSessionsCommand(ctx context.Context) ([]string, erro
 		}
 	}
 	return ids, nil
+}
+
+// KillLiveSessionCommand stops a running claude agent by killing its process tree.
+// Used to clear a "실행중" session that's actually a stale/leftover background agent.
+func (ws *WshServer) KillLiveSessionCommand(ctx context.Context, sessionId string) error {
+	sessionId = strings.TrimSpace(sessionId)
+	if sessionId == "" {
+		return fmt.Errorf("sessionId required")
+	}
+	lctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(lctx, "claude", "agents", "--json").Output()
+	if err != nil {
+		return fmt.Errorf("could not list agents: %w", err)
+	}
+	var agents []struct {
+		SessionId string `json:"sessionId"`
+		Pid       int    `json:"pid"`
+	}
+	if err := json.Unmarshal(out, &agents); err != nil {
+		return fmt.Errorf("could not parse agents: %w", err)
+	}
+	var pid int
+	for _, a := range agents {
+		if a.SessionId == sessionId {
+			pid = a.Pid
+			break
+		}
+	}
+	if pid <= 0 {
+		return fmt.Errorf("no live agent for session")
+	}
+	return killProcessTree(pid)
 }
 
 // SearchCliSessionsCommand returns sessions whose title/alias or file content matches the query.
