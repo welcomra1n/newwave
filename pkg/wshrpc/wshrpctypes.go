@@ -41,6 +41,9 @@ type CliSessionEntry struct {
 	Color     string `json:"color"`     // user-set accent color (hex), shown in sidebar + header
 	Project   string `json:"project"`   // user-assigned project group name ("" = ungrouped)
 	Snippet   string `json:"snippet"`   // matched content line (only set by search)
+	LastMsg   string `json:"lastmsg"`   // last message in the transcript (tail preview, may be empty)
+	LastRole  string `json:"lastrole"`  // "user" | "assistant" — who spoke last
+	Model     string `json:"model"`     // model short name from the last assistant turn (claude only)
 }
 
 // CliBulkProjectReq assigns many sessions to a folder in one atomic write.

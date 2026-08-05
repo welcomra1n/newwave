@@ -9,6 +9,7 @@ let globalIsStarting = true;
 let globalIsRelaunching = false;
 let forceQuit = false;
 let userConfirmedQuit = false;
+let runningSessionNames: string[] = [];
 let termCommandsRun = 0;
 let termCommandsRemote = 0;
 let termCommandsWsl = 0;
@@ -56,6 +57,17 @@ export function setForceQuit(val: boolean) {
 
 export function getForceQuit(): boolean {
     return forceQuit;
+}
+
+// Names of agent sessions that are mid-turn (working) or live as background agents,
+// pushed up from the renderer's sidebar. Used to warn before quitting — the process
+// dies with the app, so a running turn would be cut off.
+export function setRunningSessionNames(names: string[]) {
+    runningSessionNames = Array.isArray(names) ? names : [];
+}
+
+export function getRunningSessionNames(): string[] {
+    return runningSessionNames;
 }
 
 export function setUserConfirmedQuit(val: boolean) {

@@ -230,6 +230,9 @@ declare global {
         color: string;
         project: string;
         snippet: string;
+        lastmsg: string;
+        lastrole: string;
+        model: string;
     };
 
     // wshrpc.CliSessionMetaReq

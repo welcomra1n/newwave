@@ -18,6 +18,7 @@ import {
     getAndClearTermCommandsWsl,
     getForceQuit,
     getGlobalIsRelaunching,
+    getRunningSessionNames,
     getUserConfirmedQuit,
     setForceQuit,
     setGlobalIsQuitting,
@@ -266,6 +267,29 @@ electronApp.on("window-all-closed", () => {
 electronApp.on("before-quit", (e) => {
     const allWindows = getAllWaveWindows();
     const allBuilders = getAllBuilderWindows();
+    // Agent sessions run as child processes of this app: quitting cuts off a turn that is
+    // still in flight. Warn with the session names before that happens.
+    const running = getRunningSessionNames();
+    if (running.length > 0 && !getForceQuit() && !getUserConfirmedQuit() && !getIsWaveSrvDead()) {
+        e.preventDefault();
+        const shown = running.slice(0, 5).join("\n· ");
+        const more = running.length > 5 ? `\n… 외 ${running.length - 5}개` : "";
+        const choice = electron.dialog.showMessageBoxSync(null, {
+            type: "warning",
+            buttons: ["취소", "종료"],
+            title: "실행 중인 세션 있음",
+            message: `실행 중인 세션 ${running.length}개가 종료됩니다.`,
+            detail: `· ${shown}${more}\n\n지금 종료하면 진행 중인 작업이 끊깁니다. 세션 기록은 남아 다시 열면 이어서 진행할 수 있습니다.`,
+            defaultId: 0,
+            cancelId: 0,
+        });
+        if (choice === 0) {
+            return;
+        }
+        setUserConfirmedQuit(true);
+        electronApp.quit();
+        return;
+    }
     if (
         confirmQuit &&
         !getForceQuit() &&

@@ -13,6 +13,15 @@ export const sessionSidebarVisibleAtom = atomWithStorage("newwave:sidebar:visibl
 export const sessionSidebarWidthAtom = atomWithStorage("newwave:sidebar:width", 240);
 export const sessionSidebarCollapsedAtom = atomWithStorage("newwave:sidebar:collapsed", false);
 
+// --- list controls (persisted) ---
+
+// 최근순 = last activity, 이름순 = alias/title, 상태순 = 대기 > 작업중 > 열림 > 나머지
+export type SessionSort = "recent" | "name" | "status";
+// 열림/실행중/대기/작업중 만 보기 (핀은 필터와 무관하게 항상 표시)
+export type SessionStatusFilter = "all" | "waiting" | "working" | "open" | "live";
+export const sessionSortAtom = atomWithStorage<SessionSort>("newwave:sidebar:sort", "recent");
+export const sessionStatusFilterAtom = atomWithStorage<SessionStatusFilter>("newwave:sidebar:status", "all");
+
 // --- session activity ---
 
 // Session ids whose agent finished a turn and is waiting on the user.

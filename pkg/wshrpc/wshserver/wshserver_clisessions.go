@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,10 +23,13 @@ import (
 )
 
 const (
-	cliSessionsMaxResults  = 500  // cap returned entries
-	cliSessionsScanLines   = 80   // max lines scanned per file for cwd/title
-	cliSessionsTitleLen    = 100  // max title chars
-	cliSessionsSearchLines = 4000 // max lines scanned per file for content search
+	cliSessionsMaxResults  = 500       // cap returned entries
+	cliSessionsScanLines   = 80        // max lines scanned per file for cwd/title
+	cliSessionsTitleLen    = 100       // max title chars
+	cliSessionsSearchLines = 4000      // max lines scanned per file for content search
+	cliSessionsTailBytes   = 96 * 1024 // bytes read from the end of a file for the last-message preview
+	cliSessionsTailEntries = 120       // how many (newest) entries get that tail read
+	cliSessionsPreviewLen  = 140       // max preview chars
 )
 
 type cliSessionCandidate struct {
@@ -81,7 +85,119 @@ func (ws *WshServer) GetCliSessionsCommand(ctx context.Context) ([]wshrpc.CliSes
 		}
 		return entries[i].Mtime > entries[j].Mtime
 	})
+
+	// Fill in the "where did this session leave off" preview. Only the newest N entries
+	// pay the tail read — older ones scroll far down the sidebar and aren't worth the IO.
+	limit := len(entries)
+	if limit > cliSessionsTailEntries {
+		limit = cliSessionsTailEntries
+	}
+	for i := 0; i < limit; i++ {
+		fillTailPreview(&entries[i])
+	}
 	return entries, nil
+}
+
+// fillTailPreview reads the end of a session file to recover the last message text,
+// who spoke it, and (claude) the model that answered. Bounded to the last
+// cliSessionsTailBytes so a huge transcript costs one seek + one read.
+func fillTailPreview(entry *wshrpc.CliSessionEntry) {
+	f, err := os.Open(entry.FilePath)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil {
+		return
+	}
+	offset := int64(0)
+	if fi.Size() > cliSessionsTailBytes {
+		offset = fi.Size() - cliSessionsTailBytes
+	}
+	if _, err := f.Seek(offset, 0); err != nil {
+		return
+	}
+	buf, err := io.ReadAll(f)
+	if err != nil {
+		return
+	}
+	lines := strings.Split(string(buf), "\n")
+	if offset > 0 && len(lines) > 0 {
+		lines = lines[1:] // first line is a fragment of a record we seeked into
+	}
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		role, text, model := parseTranscriptLine(entry.Agent, []byte(line))
+		if entry.Model == "" && model != "" {
+			entry.Model = shortModelName(model)
+		}
+		if entry.LastMsg != "" || text == "" || isNoiseTitle(text) {
+			continue
+		}
+		entry.LastMsg = truncRunes(cleanTitle(text), cliSessionsPreviewLen)
+		entry.LastRole = role
+		if entry.Model != "" {
+			break
+		}
+	}
+}
+
+// parseTranscriptLine pulls (role, text, model) out of one jsonl record of either agent.
+func parseTranscriptLine(agent string, b []byte) (string, string, string) {
+	if agent == "claude" {
+		var ln struct {
+			Type    string `json:"type"`
+			Message struct {
+				Role    string          `json:"role"`
+				Model   string          `json:"model"`
+				Content json.RawMessage `json:"content"`
+			} `json:"message"`
+		}
+		if json.Unmarshal(b, &ln) != nil {
+			return "", "", ""
+		}
+		if ln.Type != "user" && ln.Type != "assistant" {
+			return "", "", ln.Message.Model
+		}
+		return ln.Type, extractContentText(ln.Message.Content), ln.Message.Model
+	}
+	var item codexItemLine
+	if json.Unmarshal(b, &item) != nil {
+		return "", "", ""
+	}
+	if item.Payload.Role != "user" && item.Payload.Role != "assistant" {
+		return "", "", ""
+	}
+	return item.Payload.Role, extractContentText(item.Payload.Content), ""
+}
+
+// shortModelName turns "claude-opus-5-20260101" into "opus-5" for a compact badge.
+func shortModelName(model string) string {
+	m := strings.TrimPrefix(model, "claude-")
+	parts := strings.Split(m, "-")
+	// drop a trailing YYYYMMDD date segment
+	if len(parts) > 1 {
+		last := parts[len(parts)-1]
+		if len(last) == 8 && strings.Trim(last, "0123456789") == "" {
+			parts = parts[:len(parts)-1]
+		}
+	}
+	if len(parts) > 2 {
+		parts = parts[:2]
+	}
+	return strings.Join(parts, "-")
+}
+
+func truncRunes(s string, max int) string {
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max]) + "…"
 }
 
 // GetLiveSessionsCommand returns session ids that are currently running as claude

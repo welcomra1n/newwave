@@ -29,7 +29,11 @@ import {
     sessionSidebarCollapsedAtom,
     sessionSidebarVisibleAtom,
     sessionSidebarWidthAtom,
+    sessionSortAtom,
+    sessionStatusFilterAtom,
     sessionWorkingAtom,
+    type SessionSort,
+    type SessionStatusFilter,
 } from "./sidebaratoms";
 import "./sessionsidebar.css";
 
@@ -87,6 +91,24 @@ export function playDoneSound() {
 }
 
 type AgentFilter = "all" | "claude" | "codex";
+
+const SORT_LABELS: Record<SessionSort, string> = {
+    recent: "최근순",
+    name: "이름순",
+    status: "상태순",
+};
+
+const STATUS_LABELS: Record<SessionStatusFilter, string> = {
+    all: "전체 상태",
+    waiting: "응답 대기",
+    working: "작업 중",
+    open: "열린 세션",
+    live: "실행 중",
+};
+
+function sessionLabel(s: CliSessionEntry): string {
+    return s.alias || s.title || "";
+}
 
 // Session ids currently open as blocks in the active tab (reactive).
 const activeSessionIdsAtom = atom((get): Set<string> => {
@@ -507,7 +529,15 @@ const SessionItem = memo(
                     openSession(session);
                 }}
                 onContextMenu={onContextMenu}
-                title={`${session.cwd}\n${session.sessionid}${active ? "\n(열림)" : ""}`}
+                title={[
+                    session.cwd,
+                    session.model ? `모델: ${session.model}` : "",
+                    session.lastmsg ? `${session.lastrole === "user" ? "나" : "AI"}: ${session.lastmsg}` : "",
+                    session.sessionid,
+                    active ? "(열림)" : "",
+                ]
+                    .filter(Boolean)
+                    .join("\n")}
             >
                 {/* left bar = session identity color (only when the user assigned one) */}
                 {session.color && (
@@ -545,6 +575,15 @@ const SessionItem = memo(
                             <div className="text-[10px] text-accent/80 truncate leading-tight" title={searchSnippet}>
                                 <i className="fa fa-solid fa-magnifying-glass text-[8px] mr-1 opacity-70" />
                                 {searchSnippet}
+                            </div>
+                        ) : session.lastmsg ? (
+                            // where the session left off — beats repeating the folder, which the
+                            // group header and tooltip already carry
+                            <div className="text-[10px] text-muted truncate leading-tight">
+                                <span className="text-white/35 mr-1">
+                                    {session.lastrole === "user" ? "나" : "AI"}
+                                </span>
+                                {session.lastmsg}
                             </div>
                         ) : (
                             session.cwd && (
@@ -668,6 +707,8 @@ const SessionSidebar = memo(() => {
     const [projects, setProjects] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<AgentFilter>("all");
+    const [sort, setSort] = useAtom(sessionSortAtom);
+    const [statusFilter, setStatusFilter] = useAtom(sessionStatusFilterAtom);
     const activeIds = useAtomValue(activeSessionIdsAtom);
     const attention = useAtomValue(sessionAttentionAtom);
     const working = useAtomValue(sessionWorkingAtom);
@@ -811,6 +852,15 @@ const SessionSidebar = memo(() => {
         }
     }, [sessions, activeIds]);
 
+    // Tell the main process which sessions are mid-turn / live so quitting warns first
+    // (the agent processes are children of the app and die with it).
+    useEffect(() => {
+        const names = sessions
+            .filter((s) => working.has(s.sessionid) || liveIds.has(s.sessionid))
+            .map((s) => sessionLabel(s) || s.sessionid);
+        updApi().setRunningSessions?.(names);
+    }, [sessions, working, liveIds]);
+
     // A fresh claude block starts as `claude --session-id <id>` so the sidebar can match it
     // right away. Once claude has written the session file (= it shows up in `sessions`),
     // rewrite the block's cmd to `--resume <id>`: rerunning `--session-id` on an existing
@@ -934,6 +984,38 @@ const SessionSidebar = memo(() => {
         [assignManyToProject]
     );
 
+    const openSortMenu = useCallback(
+        (e: React.MouseEvent) => {
+            e.preventDefault();
+            ContextMenuModel.getInstance().showContextMenu(
+                (Object.keys(SORT_LABELS) as SessionSort[]).map((m) => ({
+                    label: SORT_LABELS[m],
+                    type: "checkbox",
+                    checked: sort === m,
+                    click: () => setSort(m),
+                })),
+                e
+            );
+        },
+        [sort, setSort]
+    );
+
+    const openStatusMenu = useCallback(
+        (e: React.MouseEvent) => {
+            e.preventDefault();
+            ContextMenuModel.getInstance().showContextMenu(
+                (Object.keys(STATUS_LABELS) as SessionStatusFilter[]).map((m) => ({
+                    label: STATUS_LABELS[m],
+                    type: "checkbox",
+                    checked: statusFilter === m,
+                    click: () => setStatusFilter(m),
+                })),
+                e
+            );
+        },
+        [statusFilter, setStatusFilter]
+    );
+
     const openProjectPickMenu = useCallback(
         (e: React.MouseEvent) => {
             e.preventDefault();
@@ -949,13 +1031,40 @@ const SessionSidebar = memo(() => {
     );
 
     const q = query.trim().toLowerCase();
+    // status filter: pinned sessions are exempt so a pinned one never vanishes from the top
+    const statusMatch = (s: CliSessionEntry) => {
+        switch (statusFilter) {
+            case "waiting":
+                return attention.has(s.sessionid);
+            case "working":
+                return working.has(s.sessionid);
+            case "open":
+                return activeIds.has(s.sessionid);
+            case "live":
+                return liveIds.has(s.sessionid);
+            default:
+                return true;
+        }
+    };
     const shown = sessions.filter((s) => {
         if (filter !== "all" && s.agent !== filter) return false;
+        if (statusFilter !== "all" && !s.pinned && !statusMatch(s)) return false;
         if (!q) return true;
         // instant title/alias/cwd match, plus backend content match (fills in after debounce)
         const hay = `${s.alias ?? ""} ${s.title ?? ""} ${s.cwd ?? ""}`.toLowerCase();
         return hay.includes(q) || (contentMatches?.has(s.sessionid) ?? false);
     });
+    if (sort !== "recent") {
+        // backend already returns pinned-first/recency; re-sort within that pinned split
+        const rank = (s: CliSessionEntry) =>
+            attention.has(s.sessionid) ? 0 : working.has(s.sessionid) ? 1 : activeIds.has(s.sessionid) ? 2 : 3;
+        shown.sort((a, b) => {
+            if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+            if (sort === "name") return sessionLabel(a).localeCompare(sessionLabel(b), "ko");
+            const r = rank(a) - rank(b);
+            return r !== 0 ? r : b.mtime - a.mtime;
+        });
+    }
     const counts: Record<AgentFilter, number> = {
         all: sessions.length,
         claude: sessions.filter((s) => s.agent === "claude").length,
@@ -1119,7 +1228,7 @@ const SessionSidebar = memo(() => {
                     )}
                 </div>
             </div>
-            <div className="flex gap-0.5 px-1.5 py-1 border-b border-border">
+            <div className="flex items-center gap-0.5 px-1.5 py-1 border-b border-border">
                 {(["all", "claude", "codex"] as AgentFilter[]).map((f) => (
                     <button
                         key={f}
@@ -1133,7 +1242,53 @@ const SessionSidebar = memo(() => {
                         {f === "all" ? "전체" : f} <span className="opacity-60">{counts[f]}</span>
                     </button>
                 ))}
+                <button
+                    type="button"
+                    className={clsx(
+                        "ml-auto text-[10px] px-1 py-0.5 rounded-sm cursor-pointer",
+                        statusFilter === "all" ? "text-secondary hover:text-white" : "bg-accent/15 text-accent"
+                    )}
+                    title={STATUS_LABELS[statusFilter]}
+                    onClick={openStatusMenu}
+                >
+                    <i className="fa fa-solid fa-filter" />
+                </button>
+                <button
+                    type="button"
+                    className={clsx(
+                        "text-[10px] px-1 py-0.5 rounded-sm cursor-pointer",
+                        sort === "recent" ? "text-secondary hover:text-white" : "bg-accent/15 text-accent"
+                    )}
+                    title={SORT_LABELS[sort]}
+                    onClick={openSortMenu}
+                >
+                    <i className="fa fa-solid fa-arrow-down-short-wide" />
+                </button>
             </div>
+            {(statusFilter !== "all" || sort !== "recent") && (
+                <div className="flex items-center gap-1.5 px-2 py-0.5 border-b border-border text-[10px] text-accent">
+                    {statusFilter !== "all" && (
+                        <button
+                            type="button"
+                            className="cursor-pointer hover:underline"
+                            onClick={() => setStatusFilter("all")}
+                            style={{ whiteSpace: "nowrap" }}
+                        >
+                            {STATUS_LABELS[statusFilter]} <i className="fa fa-solid fa-xmark opacity-70" />
+                        </button>
+                    )}
+                    {sort !== "recent" && (
+                        <button
+                            type="button"
+                            className="cursor-pointer hover:underline"
+                            onClick={() => setSort("recent")}
+                            style={{ whiteSpace: "nowrap" }}
+                        >
+                            {SORT_LABELS[sort]} <i className="fa fa-solid fa-xmark opacity-70" />
+                        </button>
+                    )}
+                </div>
+            )}
             {creating && (
                 <div className="px-1.5 py-1 border-b border-border">
                     <input

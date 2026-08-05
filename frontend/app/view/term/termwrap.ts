@@ -37,6 +37,7 @@ import { Terminal } from "@xterm/xterm";
 import debug from "debug";
 import * as jotai from "jotai";
 import { debounce } from "throttle-debounce";
+import { attachUserMsgHighlight } from "./usermsg-highlight";
 import {
     handleOsc16162Command,
     handleOsc52Command,
@@ -307,6 +308,8 @@ export class TermWrap {
         this.heldData = [];
         this.handleResize_debounced = debounce(50, this.handleResize.bind(this));
         this.terminal.open(this.connectElem);
+        // highlight the user's own "> …" turns (see usermsg-highlight.ts)
+        this.toDispose.push(attachUserMsgHighlight(this.terminal));
 
         const dragoverHandler = (e: DragEvent) => {
             e.preventDefault();

@@ -17,6 +17,7 @@ import {
     incrementTermCommandsRemote,
     incrementTermCommandsRun,
     incrementTermCommandsWsl,
+    setRunningSessionNames,
     setWasActive,
 } from "./emain-activity";
 import { createBuilderWindow, getAllBuilderWindows, getBuilderWindowByWebContentsId } from "./emain-builder";
@@ -403,6 +404,11 @@ export function initIpcHandlers() {
                 })
             )
         );
+    });
+
+    // sidebar pushes up which agent sessions are mid-turn / live, for the quit warning
+    electron.ipcMain.on("set-running-sessions", (_event, names: string[]) => {
+        setRunningSessionNames(names);
     });
 
     electron.ipcMain.on("set-window-init-status", (event, status: "ready" | "wave-ready") => {
