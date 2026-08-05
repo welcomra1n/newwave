@@ -308,7 +308,19 @@ const SESSION_COLORS: { label: string; value: string }[] = [
 // blue=working, amber=waiting/running-elsewhere, grey=closed) — separate from the
 // session's own identity color (shown as the left bar).
 const StatusCapsule = memo(
-    ({ active, working, done, live }: { active: boolean; working: boolean; done: boolean; live: boolean }) => {
+    ({
+        active,
+        working,
+        done,
+        live,
+        liveHost,
+    }: {
+        active: boolean;
+        working: boolean;
+        done: boolean;
+        live: boolean;
+        liveHost?: LiveSessionEntry;
+    }) => {
         if (active && working)
             return (
                 <span className="baw-cap cap-work" title="작업 중">
@@ -330,12 +342,24 @@ const StatusCapsule = memo(
                     열림
                 </span>
             );
-        if (live)
+        if (live) {
+            // which app owns the agent process — a session started in an outside PowerShell
+            // looks identical otherwise, so show the owner as an icon + tooltip
+            const host = liveHost?.host || "확인 불가";
+            const inApp = liveHost?.isself ?? false;
+            const isBg = liveHost?.kind === "background";
+            const statusText = liveHost?.status ? ` · ${liveHost.status}` : "";
+            const icon = isBg ? "fa-robot" : inApp ? "fa-window-maximize" : "fa-arrow-up-right-from-square";
             return (
-                <span className="baw-cap cap-run" title="다른 곳에서 실행 중">
+                <span
+                    className="baw-cap cap-run"
+                    title={`실행 중 · ${host}${inApp || isBg ? "" : " (이 앱 밖)"}${statusText}`}
+                >
+                    <i className={clsx("fa fa-solid", icon)} />
                     실행중
                 </span>
             );
+        }
         return (
             <span className="baw-cap cap-closed" title="닫힘">
                 닫힘
@@ -354,6 +378,7 @@ const SessionItem = memo(
         highlighted,
         searchSnippet,
         live,
+        liveHost,
         onLiveClick,
         projects,
         selected,
@@ -368,6 +393,7 @@ const SessionItem = memo(
         highlighted: boolean;
         searchSnippet?: string;
         live: boolean;
+        liveHost?: LiveSessionEntry;
         onLiveClick: (s: CliSessionEntry) => void;
         projects: string[];
         selected: boolean;
@@ -596,7 +622,7 @@ const SessionItem = memo(
                 )}
                 {/* fixed-width status column so the row never shifts as the state changes */}
                 <div className="w-[54px] shrink-0 flex justify-start">
-                    <StatusCapsule active={active} working={working} done={done} live={live} />
+                    <StatusCapsule active={active} working={working} done={done} live={live} liveHost={liveHost} />
                 </div>
                 {/* fixed-width time column */}
                 <span className="w-[34px] shrink-0 text-right text-[10px] text-muted">{relTime(session.mtime)}</span>
@@ -733,6 +759,8 @@ const SessionSidebar = memo(() => {
     const [navIdx, setNavIdx] = useState(-1);
     // sessionids currently live as claude agents (interactive/background)
     const [liveIds, setLiveIds] = useState<Set<string>>(new Set());
+    // sessionid -> which app owns the running agent (this app vs an outside terminal)
+    const [liveHosts, setLiveHosts] = useState<Map<string, LiveSessionEntry>>(new Map());
     // transient notice banner (e.g. clicking an already-running session)
     const [notice, setNotice] = useState("");
 
@@ -785,8 +813,11 @@ const SessionSidebar = memo(() => {
         const poll = () =>
             fireAndForget(async () => {
                 try {
-                    const ids = await RpcApi.GetLiveSessionsCommand(TabRpcClient);
-                    if (!cancelled) setLiveIds(new Set(ids ?? []));
+                    const entries = (await RpcApi.GetLiveSessionsCommand(TabRpcClient)) ?? [];
+                    if (!cancelled) {
+                        setLiveIds(new Set(entries.map((e) => e.sessionid)));
+                        setLiveHosts(new Map(entries.map((e) => [e.sessionid, e])));
+                    }
                 } catch {
                     // non-fatal
                 }
@@ -1111,6 +1142,7 @@ const SessionSidebar = memo(() => {
                         highlighted={navIdx >= 0 && shown[navIdx]?.sessionid === s.sessionid}
                         searchSnippet={contentMatches?.get(s.sessionid) || undefined}
                         live={liveIds.has(s.sessionid)}
+                        liveHost={liveHosts.get(s.sessionid)}
                         onLiveClick={(sess) =>
                             setNotice(
                                 `"${sess.alias || sess.title || "세션"}"은(는) 이미 실행 중입니다. 우클릭 → 세션 종료로 정리하거나, 복사본으로 열기(fork)로 별도 사본을 열 수 있어요.`

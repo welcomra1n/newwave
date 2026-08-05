@@ -19,6 +19,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shirou/gopsutil/v4/process"
+
 	"github.com/wavetermdev/waveterm/pkg/wshrpc"
 )
 
@@ -203,27 +205,108 @@ func truncRunes(s string, max int) string {
 // GetLiveSessionsCommand returns session ids that are currently running as claude
 // agents (interactive or background), so the UI can mark them "running" and warn
 // before a resume that would be refused.
-func (ws *WshServer) GetLiveSessionsCommand(ctx context.Context) ([]string, error) {
+func (ws *WshServer) GetLiveSessionsCommand(ctx context.Context) ([]wshrpc.LiveSessionEntry, error) {
 	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, "claude", "agents", "--json").Output()
 	if err != nil {
 		// claude not on PATH or no agents — non-fatal, just report none
-		return []string{}, nil
+		return []wshrpc.LiveSessionEntry{}, nil
 	}
 	var agents []struct {
 		SessionId string `json:"sessionId"`
+		Pid       int    `json:"pid"`
+		Kind      string `json:"kind"`
+		Status    string `json:"status"`
+		State     string `json:"state"`
 	}
 	if err := json.Unmarshal(out, &agents); err != nil {
-		return []string{}, nil
+		return []wshrpc.LiveSessionEntry{}, nil
 	}
-	ids := make([]string, 0, len(agents))
+	entries := make([]wshrpc.LiveSessionEntry, 0, len(agents))
 	for _, a := range agents {
-		if a.SessionId != "" {
-			ids = append(ids, a.SessionId)
+		if a.SessionId == "" {
+			continue
 		}
+		// background agents have no pid — they belong to no window at all
+		host, isSelf := resolveSessionHost(a.Pid)
+		if a.Kind == "background" {
+			host = "백그라운드 에이전트"
+			isSelf = false
+		} else if host == "" {
+			host = "알 수 없는 앱"
+		}
+		entries = append(entries, wshrpc.LiveSessionEntry{
+			SessionId: a.SessionId,
+			Pid:       a.Pid,
+			Host:      host,
+			IsSelf:    isSelf,
+			Kind:      a.Kind,
+			Status:    firstNonEmpty(a.Status, a.State),
+		})
 	}
-	return ids, nil
+	return entries, nil
+}
+
+// hostAppNames maps a process name to the app label shown in the sidebar. Matched
+// against the ancestors of the agent process, nearest first.
+var hostAppNames = map[string]string{
+	"newwave":          "NewWave",
+	"wavesrv":          "NewWave",
+	"wavesrv.x64":      "NewWave",
+	"electron":         "NewWave (개발)",
+	"windowsterminal":  "Windows Terminal",
+	"powershell":       "PowerShell",
+	"pwsh":             "PowerShell",
+	"cmd":              "명령 프롬프트",
+	"wt":               "Windows Terminal",
+	"wezterm-gui":      "WezTerm",
+	"alacritty":        "Alacritty",
+	"kitty":            "kitty",
+	"iterm2":           "iTerm2",
+	"terminal":         "Terminal",
+	"code":             "VS Code",
+	"cursor":           "Cursor",
+	"conhost":          "콘솔 창",
+	"openconsole":      "콘솔 창",
+	"windowsterminal!": "Windows Terminal",
+}
+
+// resolveSessionHost walks up the agent process's ancestors to find which app it is
+// running under, so a session started in an outside PowerShell isn't confused with one
+// running in this app. Returns a display label and whether the owner is this process tree.
+func resolveSessionHost(pid int) (string, bool) {
+	if pid <= 0 {
+		return "", false
+	}
+	selfPid := int32(os.Getpid())
+	proc, err := process.NewProcess(int32(pid))
+	if err != nil {
+		return "", false
+	}
+	var fallback string
+	for i := 0; i < 12 && proc != nil; i++ {
+		name, nameErr := proc.Name()
+		if nameErr == nil && name != "" {
+			if proc.Pid == selfPid {
+				return "NewWave", true
+			}
+			key := strings.ToLower(strings.TrimSuffix(name, ".exe"))
+			if label, found := hostAppNames[key]; found {
+				return label, strings.HasPrefix(label, "NewWave")
+			}
+			// remember the first ancestor above claude itself as a last resort
+			if fallback == "" && key != "claude" && key != "node" && key != "bash" && key != "sh" {
+				fallback = name
+			}
+		}
+		parent, perr := proc.Parent()
+		if perr != nil || parent == nil || parent.Pid == proc.Pid {
+			break
+		}
+		proc = parent
+	}
+	return fallback, false
 }
 
 // KillLiveSessionCommand stops a running claude agent by killing its process tree.

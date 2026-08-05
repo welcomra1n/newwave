@@ -463,7 +463,7 @@ export class RpcApiType {
     }
 
     // command "getlivesessions" [call]
-    GetLiveSessionsCommand(client: WshClient, opts?: RpcOpts): Promise<string[]> {
+    GetLiveSessionsCommand(client: WshClient, opts?: RpcOpts): Promise<LiveSessionEntry[]> {
         if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "getlivesessions", null, opts);
         return client.wshRpcCall("getlivesessions", null, opts);
     }

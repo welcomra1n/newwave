@@ -1124,6 +1124,16 @@ declare global {
         blockid: string;
     };
 
+    // wshrpc.LiveSessionEntry
+    type LiveSessionEntry = {
+        sessionid: string;
+        pid: number;
+        host: string;
+        isself: boolean;
+        kind: string;
+        status: string;
+    };
+
     // waveobj.MetaTSType
     type MetaType = {
         view?: string;

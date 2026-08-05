@@ -9,7 +9,7 @@ import YAML from "yaml";
 import { RpcApi } from "../frontend/app/store/wshclientapi";
 import { isDev } from "../frontend/util/isdev";
 import { fireAndForget } from "../frontend/util/util";
-import { setUserConfirmedQuit } from "./emain-activity";
+import { getRunningSessionNames, setUserConfirmedQuit } from "./emain-activity";
 import { delay } from "./emain-util";
 import { focusedWaveWindow, getAllWaveWindows } from "./emain-window";
 import { ElectronWshClient } from "./emain-wsh";
@@ -179,12 +179,23 @@ export class Updater {
      * Prompts the user to install the downloaded application update and restarts the application
      */
     async promptToInstallUpdate() {
+        // Installing restarts the app, which kills every agent process with it. If a session
+        // is mid-turn, that turn is lost — so make "나중에" the default and say what is running.
+        const running = getRunningSessionNames();
+        const runningList = running.slice(0, 5).join("\n· ");
+        const runningMore = running.length > 5 ? `\n… 외 ${running.length - 5}개` : "";
+        const runningDetail =
+            running.length > 0
+                ? `\n\n[주의] 작업 중인 세션 ${running.length}개가 있습니다:\n· ${runningList}${runningMore}\n지금 재시작하면 진행 중인 작업이 끊깁니다. 세션이 끝난 뒤 설치하세요.`
+                : "";
         const dialogOpts: Electron.MessageBoxOptions = {
-            type: "info",
-            buttons: ["Restart", "Later"],
-            title: "Application Update",
+            type: running.length > 0 ? "warning" : "info",
+            buttons: ["지금 재시작", "나중에"],
+            defaultId: running.length > 0 ? 1 : 0,
+            cancelId: 1,
+            title: "업데이트 설치",
             message: process.platform === "win32" ? this.availableUpdateReleaseNotes : this.availableUpdateReleaseName,
-            detail: "A new version has been downloaded. Restart the application to apply the updates.",
+            detail: `새 버전을 내려받았습니다. 재시작하면 적용됩니다.${runningDetail}`,
         };
 
         const allWindows = getAllWaveWindows();

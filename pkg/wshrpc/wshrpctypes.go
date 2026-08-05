@@ -46,6 +46,18 @@ type CliSessionEntry struct {
 	Model     string `json:"model"`     // model short name from the last assistant turn (claude only)
 }
 
+// LiveSessionEntry is a claude session currently running as an agent process,
+// plus which app owns it (this app vs. an outside terminal) so the sidebar can
+// say where the session actually lives.
+type LiveSessionEntry struct {
+	SessionId string `json:"sessionid"`
+	Pid       int    `json:"pid"`
+	Host      string `json:"host"`   // friendly owner name, e.g. "NewWave", "PowerShell"
+	IsSelf    bool   `json:"isself"` // true when the owning app is this NewWave instance
+	Kind      string `json:"kind"`   // "interactive" | "background" (claude's own classification)
+	Status    string `json:"status"` // claude-reported state, e.g. "idle" | "blocked"
+}
+
 // CliBulkProjectReq assigns many sessions to a folder in one atomic write.
 type CliBulkProjectReq struct {
 	SessionIds []string `json:"sessionids"`
@@ -127,7 +139,7 @@ type WshRpcInterface interface {
 	SetConnectionsConfigCommand(ctx context.Context, data ConnConfigRequest) error
 	GetFullConfigCommand(ctx context.Context) (wconfig.FullConfigType, error)
 	GetCliSessionsCommand(ctx context.Context) ([]CliSessionEntry, error)
-	GetLiveSessionsCommand(ctx context.Context) ([]string, error)
+	GetLiveSessionsCommand(ctx context.Context) ([]LiveSessionEntry, error)
 	KillLiveSessionCommand(ctx context.Context, sessionId string) error
 	SearchCliSessionsCommand(ctx context.Context, data CliSessionSearchReq) ([]CliSessionEntry, error)
 	SetCliSessionMetaCommand(ctx context.Context, data CliSessionMetaReq) error
@@ -401,7 +413,6 @@ type CommandEventReadHistoryData struct {
 	Scope    string `json:"scope"`
 	MaxItems int    `json:"maxitems"`
 }
-
 
 type CpuDataRequest struct {
 	Id    string `json:"id"`
