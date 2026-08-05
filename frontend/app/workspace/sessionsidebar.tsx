@@ -208,13 +208,16 @@ function openSessionFork(s: CliSessionEntry) {
     fireAndForget(() => createBlock(blockDef));
 }
 
-// Start a fresh claude/codex session (no --resume) in a new terminal block.
+// Start a fresh session in a new terminal block. For claude we pre-assign the session id
+// (`--session-id <uuid>`) so the block is linkable to its sidebar entry from the start —
+// otherwise a bare `claude` block has no id and can't be matched (rename/find/active break).
 function newSession(agent: "claude" | "codex") {
+    const cmd = agent === "claude" ? `claude --session-id ${crypto.randomUUID()}` : "codex";
     const blockDef: BlockDef = {
         meta: {
             view: "term",
             controller: "cmd",
-            cmd: agent,
+            cmd,
             // start in the last folder a session was opened from (falls back to app default)
             "cmd:cwd": lastSessionCwd || undefined,
         },
@@ -807,6 +810,28 @@ const SessionSidebar = memo(() => {
             }
         }
     }, [sessions, activeIds]);
+
+    // A fresh claude block starts as `claude --session-id <id>` so the sidebar can match it
+    // right away. Once claude has written the session file (= it shows up in `sessions`),
+    // rewrite the block's cmd to `--resume <id>`: rerunning `--session-id` on an existing
+    // session fails ("Session ID ... is already in use"), which would break the block the
+    // next time the app restarts and replays its cmd. `cmd` is only read when the controller
+    // starts, so swapping it does not disturb the running process.
+    useEffect(() => {
+        for (const s of sessions) {
+            if (s.agent !== "claude") continue;
+            const blockId = findOpenBlockId(s.sessionid);
+            if (!blockId) continue;
+            const cmd = globalStore.get(getBlockMetaKeyAtom(blockId, "cmd")) as string | undefined;
+            if (!cmd?.includes("--session-id")) continue;
+            fireAndForget(() =>
+                RpcApi.SetMetaCommand(TabRpcClient, {
+                    oref: WOS.makeORef("block", blockId),
+                    meta: { cmd: `claude --resume ${s.sessionid}` },
+                })
+            );
+        }
+    }, [sessions]);
 
     const startResize = useCallback(
         (e: React.MouseEvent) => {

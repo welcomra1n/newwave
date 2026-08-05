@@ -54,9 +54,10 @@ export function clearSessionWorking(sessionid: string) {
 export type SessionBrief = { title: string; alias: string; cwd: string; mtime: number };
 export const sessionInfoAtom = atom<Map<string, SessionBrief>>(new Map<string, SessionBrief>());
 
-// Pull the resume session id out of a block's cmd, e.g. "claude --resume <id>".
+// Pull the session id out of a block's cmd: "claude --resume <id>",
+// "codex resume <id>", or a fresh session started with "claude --session-id <id>".
 export function parseResumeId(cmd: string | undefined): string | null {
     if (!cmd) return null;
-    const m = cmd.match(/(?:--resume|resume)\s+(\S+)/);
+    const m = cmd.match(/(?:--resume|--session-id|resume)\s+(\S+)/);
     return m ? m[1] : null;
 }

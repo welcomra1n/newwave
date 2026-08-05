@@ -25,6 +25,7 @@ import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { useWaveEnv } from "@/app/waveenv/waveenv";
 import { bumpSessionList } from "@/app/workspace/sessionsidebar";
+import { parseResumeId } from "@/app/workspace/sidebaratoms";
 import { IconButton } from "@/element/iconbutton";
 import { NodeModel } from "@/layout/index";
 import * as util from "@/util/util";
@@ -46,9 +47,9 @@ function setBlockMeta(blockId: string, meta: MetaType) {
 function applyHeaderColor(blockId: string, color: string | null) {
     setBlockMeta(blockId, { "frame:text:bg": color });
     const cmd = globalStore.get(getBlockMetaKeyAtom(blockId, "cmd")) as string | undefined;
-    const m = cmd?.match(/(?:--resume|resume)\s+(\S+)/);
-    if (m) {
-        RpcApi.SetCliSessionMetaCommand(TabRpcClient, { sessionid: m[1], color: color ?? "" }).then(() =>
+    const sid = parseResumeId(cmd);
+    if (sid) {
+        RpcApi.SetCliSessionMetaCommand(TabRpcClient, { sessionid: sid, color: color ?? "" }).then(() =>
             bumpSessionList()
         );
     }
@@ -150,9 +151,9 @@ const HeaderTextElems = React.memo(({ viewModel, blockId, preview, error }: Head
                             const cmd = globalStore.get(waveEnv.getBlockMetaKeyAtom(blockId, "cmd")) as
                                 | string
                                 | undefined;
-                            const m = cmd?.match(/(?:--resume|resume)\s+(\S+)/);
-                            if (m) {
-                                RpcApi.SetCliSessionMetaCommand(TabRpcClient, { sessionid: m[1], alias: val }).then(
+                            const sid = parseResumeId(cmd);
+                            if (sid) {
+                                RpcApi.SetCliSessionMetaCommand(TabRpcClient, { sessionid: sid, alias: val }).then(
                                     () => bumpSessionList()
                                 );
                             }
