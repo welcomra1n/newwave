@@ -195,6 +195,9 @@
         "web:openlinksinternally": {
           "type": "boolean"
         },
+        "web:externalbrowser": {
+          "type": "string"
+        },
         "web:defaulturl": {
           "type": "string"
         },

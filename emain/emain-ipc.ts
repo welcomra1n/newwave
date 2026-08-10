@@ -30,6 +30,42 @@ import { ElectronWshClient } from "./emain-wsh";
 
 const electronApp = electron.app;
 
+// Well-known install locations so `web:externalbrowser: "chrome"` works without a full path.
+const browserAliases: Record<string, string[]> = {
+    chrome: [
+        "C:\Program Files\Google\Chrome\Application\chrome.exe",
+        "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/usr/bin/google-chrome",
+    ],
+    edge: [
+        "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        "C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+    ],
+    firefox: [
+        "C:\Program Files\Mozilla Firefox\firefox.exe",
+        "/Applications/Firefox.app/Contents/MacOS/firefox",
+        "/usr/bin/firefox",
+    ],
+};
+
+// Returns an executable path for a configured browser, or null when nothing matches.
+function resolveBrowserPath(browser: string): string | null {
+    const value = browser.trim();
+    if (value === "") {
+        return null;
+    }
+    if (value.includes("/") || value.includes("\\")) {
+        return fs.existsSync(value) ? value : null;
+    }
+    const candidates = browserAliases[value.toLowerCase()];
+    if (candidates == null) {
+        return null;
+    }
+    return candidates.find((p) => fs.existsSync(p)) ?? null;
+}
+
 let webviewFocusId: number = null;
 let webviewKeys: string[] = [];
 
@@ -194,18 +230,34 @@ function saveImageFileWithNativeDialog(
 }
 
 export function initIpcHandlers() {
-    electron.ipcMain.on("open-external", (event, url) => {
-        if (url && typeof url === "string") {
-            fireAndForget(() =>
-                callWithOriginalXdgCurrentDesktopAsync(() =>
-                    electron.shell.openExternal(url).catch((err) => {
-                        console.error(`Failed to open URL ${url}:`, err);
-                    })
-                )
-            );
-        } else {
+    electron.ipcMain.on("open-external", (event, url, browserPath?: string) => {
+        if (!url || typeof url !== "string") {
             console.error("Invalid URL received in open-external event:", url);
+            return;
         }
+        // web:externalbrowser pins links to one browser instead of the OS default. The URL is
+        // passed as its own argv entry, so nothing can quote-mangle it the way a shell would.
+        if (browserPath && typeof browserPath === "string") {
+            const exe = resolveBrowserPath(browserPath);
+            if (exe != null) {
+                try {
+                    const child = child_process.spawn(exe, [url], { detached: true, stdio: "ignore" });
+                    child.unref();
+                    return;
+                } catch (err) {
+                    console.error(`Failed to open URL in ${exe}, falling back to default browser:`, err);
+                }
+            } else {
+                console.error(`Configured browser not found: ${browserPath}, using default browser`);
+            }
+        }
+        fireAndForget(() =>
+            callWithOriginalXdgCurrentDesktopAsync(() =>
+                electron.shell.openExternal(url).catch((err) => {
+                    console.error(`Failed to open URL ${url}:`, err);
+                })
+            )
+        );
     });
 
     electron.ipcMain.on("webview-image-contextmenu", (event: electron.IpcMainEvent, payload: { src: string }) => {

@@ -534,6 +534,12 @@ function getLocalHostDisplayNameAtom(): Atom<string> {
  * @param forceOpenInternally Force the link to open in a new web widget.
  */
 async function openLink(uri: string, forceOpenInternally = false) {
+    // strip wrapping quotes/brackets/angle-brackets and trailing punctuation the terminal
+    // link matcher sometimes grabs — otherwise the OS gets a malformed URL and won't open it.
+    uri = uri
+        .trim()
+        .replace(/^["'`<([]+/, "")
+        .replace(/["'`>)\].,]+$/, "");
     if (forceOpenInternally || globalStore.get(atoms.settingsAtom)?.["web:openlinksinternally"]) {
         const blockDef: BlockDef = {
             meta: {
@@ -543,7 +549,9 @@ async function openLink(uri: string, forceOpenInternally = false) {
         };
         await createBlock(blockDef);
     } else {
-        getApi().openExternal(uri);
+        // web:externalbrowser lets links bypass the OS default browser (e.g. always Chrome)
+        const browser = globalStore.get(atoms.settingsAtom)?.["web:externalbrowser"];
+        getApi().openExternal(uri, browser || undefined);
     }
 }
 

@@ -461,8 +461,8 @@ func GetJwtPublicKeyCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) (string, er
 }
 
 // command "getlivesessions", wshserver.GetLiveSessionsCommand
-func GetLiveSessionsCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) ([]string, error) {
-	resp, err := sendRpcRequestCallHelper[[]string](w, "getlivesessions", nil, opts)
+func GetLiveSessionsCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) ([]wshrpc.LiveSessionEntry, error) {
+	resp, err := sendRpcRequestCallHelper[[]wshrpc.LiveSessionEntry](w, "getlivesessions", nil, opts)
 	return resp, err
 }
 

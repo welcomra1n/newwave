@@ -75,7 +75,11 @@ function clearTimeoutRef(ref: React.RefObject<number | null>) {
 
 const HoverDelayMs = 600;
 const MaxHoverTimeMs = 2200;
-const modKey = PLATFORM === PlatformMacOS ? "Cmd" : "Ctrl";
+// resolved per render: PLATFORM starts as "darwin" and is only corrected once the window
+// init options arrive, so a module-load snapshot showed "Cmd" to Windows users
+function modKey(): string {
+    return PLATFORM === PlatformMacOS ? "Cmd" : "Ctrl";
+}
 
 interface TermLinkTooltipProps {
     /**
@@ -130,5 +134,5 @@ export const TermLinkTooltip = React.memo(function TermLinkTooltip({ termWrap }:
         };
     }, [termWrap]);
 
-    return <TermTooltip mousePos={mousePos} content={<span>{modKey}-click to open link</span>} />;
+    return <TermTooltip mousePos={mousePos} content={<span>{modKey()}-click to open link</span>} />;
 });

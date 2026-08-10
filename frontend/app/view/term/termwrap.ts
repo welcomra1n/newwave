@@ -30,13 +30,13 @@ import { base64ToArray, fireAndForget } from "@/util/util";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { SerializeAddon } from "@xterm/addon-serialize";
-import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import * as TermTypes from "@xterm/xterm";
 import { Terminal } from "@xterm/xterm";
 import debug from "debug";
 import * as jotai from "jotai";
 import { debounce } from "throttle-debounce";
+import { registerTermLinkProvider } from "./termlinks";
 import { attachUserMsgHighlight } from "./usermsg-highlight";
 import {
     handleOsc16162Command,
@@ -176,34 +176,26 @@ export class TermWrap {
         this.terminal.loadAddon(this.searchAddon);
         this.terminal.loadAddon(this.fitAddon);
         this.terminal.loadAddon(this.serializeAddon);
-        this.terminal.loadAddon(
-            new WebLinksAddon(
-                (e, uri) => {
+        // own link provider (see termlinks.ts): joins URLs the agent TUI split across rows,
+        // which the stock web-links addon leaves half-clickable
+        this.toDispose.push(
+            registerTermLinkProvider(this.terminal, {
+                activate: (e, uri) => {
                     e.preventDefault();
-                    switch (PLATFORM) {
-                        case PlatformMacOS:
-                            if (e.metaKey) {
-                                fireAndForget(() => openLink(uri));
-                            }
-                            break;
-                        default:
-                            if (e.ctrlKey) {
-                                fireAndForget(() => openLink(uri));
-                            }
-                            break;
+                    const modPressed = PLATFORM === PlatformMacOS ? e.metaKey : e.ctrlKey || e.metaKey;
+                    if (modPressed) {
+                        fireAndForget(() => openLink(uri));
                     }
                 },
-                {
-                    hover: (e, uri) => {
-                        this.hoveredLinkUri = uri;
-                        this.onLinkHover?.(uri, e.clientX, e.clientY);
-                    },
-                    leave: () => {
-                        this.hoveredLinkUri = null;
-                        this.onLinkHover?.(null, 0, 0);
-                    },
-                }
-            )
+                hover: (e, uri) => {
+                    this.hoveredLinkUri = uri;
+                    this.onLinkHover?.(uri, e.clientX, e.clientY);
+                },
+                leave: () => {
+                    this.hoveredLinkUri = null;
+                    this.onLinkHover?.(null, 0, 0);
+                },
+            })
         );
         this.setTermRenderer(WebGLSupported && waveOptions.useWebGl ? "webgl" : "dom");
         // Register OSC handlers

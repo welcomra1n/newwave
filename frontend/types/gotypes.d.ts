@@ -1482,6 +1482,7 @@ declare global {
         "editor:inlinediff"?: boolean;
         "web:*"?: boolean;
         "web:openlinksinternally"?: boolean;
+        "web:externalbrowser"?: string;
         "web:defaulturl"?: string;
         "web:defaultsearch"?: string;
         "autoupdate:*"?: boolean;
