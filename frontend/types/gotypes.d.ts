@@ -1457,6 +1457,9 @@ declare global {
         "term:fontsize"?: number;
         "term:fontfamily"?: string;
         "term:theme"?: string;
+        "term:usermsghighlight"?: boolean;
+        "term:usermsgbg"?: string;
+        "term:usermsgcolor"?: string;
         "term:disablewebgl"?: boolean;
         "term:localshellpath"?: string;
         "term:localshellopts"?: string[];

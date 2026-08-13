@@ -11,6 +11,16 @@
     width: 200px;
 }
 
+.view-term.usermsg-off .xterm-rows > div.nw-usermsg {
+    background-color: transparent;
+    box-shadow: none;
+}
+
+// only recolor the text when term:usermsgcolor is set, so the agent's own colors survive otherwise
+.view-term.usermsg-fg .xterm-rows > div.nw-usermsg span {
+    color: var(--nw-usermsg-fg) !important;
+}
+
 .view-term {
     display: flex;
     flex-direction: column;
@@ -137,11 +147,11 @@
         }
 
         // the user's own turns ("> …"), tagged by usermsg-highlight.ts.
-        // Blue band, deliberately off the green key color so it reads as "mine"
-        // and not as agent output, even in a small tiled block.
+        // Blue band by default, deliberately off the green key color so it reads as
+        // "mine" and not as agent output. Overridable via term:usermsgbg / term:usermsgcolor.
         .xterm-rows > div.nw-usermsg {
-            background-color: rgba(88, 140, 255, 0.16);
-            box-shadow: inset 2px 0 0 rgba(130, 175, 255, 0.9);
+            background-color: var(--nw-usermsg-bg, rgba(88, 140, 255, 0.16));
+            box-shadow: inset 2px 0 0 var(--nw-usermsg-bar, rgba(130, 175, 255, 0.9));
         }
     }
 }

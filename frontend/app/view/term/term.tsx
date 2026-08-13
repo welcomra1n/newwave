@@ -13,7 +13,7 @@ import { waveEventSubscribeSingle } from "@/app/store/wps";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import type { TermViewModel } from "@/app/view/term/term-model";
-import { atoms, getOverrideConfigAtom, getSettingsPrefixAtom, WOS } from "@/store/global";
+import { atoms, getOverrideConfigAtom, getSettingsKeyAtom, getSettingsPrefixAtom, WOS } from "@/store/global";
 import { fireAndForget, useAtomValueSafe } from "@/util/util";
 import { computeBgStyleFromMeta } from "@/util/waveutil";
 import { ISearchOptions } from "@xterm/addon-search";
@@ -384,8 +384,28 @@ const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => 
         [model]
     );
 
+    // user-message highlight (usermsg-highlight.ts) is styled through these vars so the
+    // colors stay configurable per settings instead of being baked into term.scss
+    const userMsgOn = jotai.useAtomValue(getSettingsKeyAtom("term:usermsghighlight")) ?? true;
+    const userMsgBg = jotai.useAtomValue(getSettingsKeyAtom("term:usermsgbg"));
+    const userMsgColor = jotai.useAtomValue(getSettingsKeyAtom("term:usermsgcolor"));
+    const userMsgStyle: React.CSSProperties = {};
+    if (userMsgBg) userMsgStyle["--nw-usermsg-bg" as any] = userMsgBg;
+    if (userMsgColor) {
+        userMsgStyle["--nw-usermsg-fg" as any] = userMsgColor;
+        userMsgStyle["--nw-usermsg-bar" as any] = userMsgColor; // left bar follows the text color
+    }
+
     return (
-        <div className={clsx("view-term", "term-mode-" + termMode)} ref={viewRef} onContextMenu={handleContextMenu}>
+        <div
+            className={clsx("view-term", "term-mode-" + termMode, {
+                "usermsg-off": !userMsgOn,
+                "usermsg-fg": !!userMsgColor,
+            })}
+            style={userMsgStyle}
+            ref={viewRef}
+            onContextMenu={handleContextMenu}
+        >
             {termBg && <div key="term-bg" className="absolute inset-0 z-0 pointer-events-none" style={termBg} />}
             <TermResyncHandler blockId={blockId} model={model} />
             <TermThemeUpdater blockId={blockId} model={model} termRef={model.termRef} />

@@ -90,10 +90,14 @@ type SettingsType struct {
 	WaveAiShowCloudModes bool   `json:"waveai:showcloudmodes,omitempty"`
 	WaveAiDefaultMode    string `json:"waveai:defaultmode,omitempty"`
 
-	TermClear                  bool     `json:"term:*,omitempty"`
-	TermFontSize               float64  `json:"term:fontsize,omitempty"`
-	TermFontFamily             string   `json:"term:fontfamily,omitempty"`
-	TermTheme                  string   `json:"term:theme,omitempty"`
+	TermClear      bool    `json:"term:*,omitempty"`
+	TermFontSize   float64 `json:"term:fontsize,omitempty"`
+	TermFontFamily string  `json:"term:fontfamily,omitempty"`
+	TermTheme      string  `json:"term:theme,omitempty"`
+	// highlight for the user's own turns in an agent session (see usermsg-highlight.ts)
+	TermUserMsgHighlight       *bool    `json:"term:usermsghighlight,omitempty"`
+	TermUserMsgBg              string   `json:"term:usermsgbg,omitempty"`
+	TermUserMsgColor           string   `json:"term:usermsgcolor,omitempty"`
 	TermDisableWebGl           bool     `json:"term:disablewebgl,omitempty"`
 	TermLocalShellPath         string   `json:"term:localshellpath,omitempty"`
 	TermLocalShellOpts         []string `json:"term:localshellopts,omitempty"`

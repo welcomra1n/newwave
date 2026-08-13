@@ -113,6 +113,15 @@
         "term:theme": {
           "type": "string"
         },
+        "term:usermsghighlight": {
+          "type": "boolean"
+        },
+        "term:usermsgbg": {
+          "type": "string"
+        },
+        "term:usermsgcolor": {
+          "type": "string"
+        },
         "term:disablewebgl": {
           "type": "boolean"
         },
