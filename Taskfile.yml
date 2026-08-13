@@ -491,7 +491,11 @@ tasks:
         sources:
             - package-lock.json
             - package.json
-        cmd: npm install
+        # Root + tsunami/frontend only. The `docs` workspace pulls in sharp, whose native
+        # build needs node-gyp to find Visual Studio — broken on the current windows runner
+        # image (reports VS 18 as "undefined"), and docs are not part of the app package.
+        # Use `task docsite` / docs:npm:install when working on the docsite.
+        cmd: npm install -w tsunami/frontend --include-workspace-root
 
     go:mod:tidy:
         desc: Runs `go mod tidy`
