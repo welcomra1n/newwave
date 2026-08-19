@@ -290,6 +290,8 @@ tasks:
         generates:
             - "dist/bin/wsh*"
 
+    # mips/mips64 targets dropped: no such host is used here and each cross build costs
+    # release time. Add them back here if a MIPS box ever needs wsh.
     build:wsh:parallel:
         deps:
             - task: build:wsh:internal
@@ -308,14 +310,6 @@ tasks:
               vars:
                   GOOS: linux
                   GOARCH: amd64
-            - task: build:wsh:internal
-              vars:
-                  GOOS: linux
-                  GOARCH: mips
-            - task: build:wsh:internal
-              vars:
-                  GOOS: linux
-                  GOARCH: mips64
             - task: build:wsh:internal
               vars:
                   GOOS: windows

@@ -17,6 +17,11 @@ on:
     paths: ["package.json"]
   workflow_dispatch:
 
+# a newer version bump makes an in-flight build pointless
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   release:
     # Both platforms. Mac is signed in CI via MAC_CSC_LINK / MAC_CSC_KEY_PASSWORD secrets
@@ -32,6 +37,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: npm
 
       - uses: actions/setup-go@v5
         with:
@@ -43,14 +49,23 @@ jobs:
           version: 3.x
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Cache Zig (Windows CGO)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: zig-x86_64-windows-0.14.1
+          key: zig-0.14.1-windows
+
       - name: Install Zig (Windows CGO)
         if: runner.os == 'Windows'
         shell: bash
         run: |
           set -e
           ZIG_VER=0.14.1
-          curl -fsSL "https://ziglang.org/download/${ZIG_VER}/zig-x86_64-windows-${ZIG_VER}.zip" -o zig.zip
-          unzip -q zig.zip
+          if [ ! -x "zig-x86_64-windows-${ZIG_VER}/zig.exe" ]; then
+            curl -fsSL "https://ziglang.org/download/${ZIG_VER}/zig-x86_64-windows-${ZIG_VER}.zip" -o zig.zip
+            unzip -q zig.zip
+          fi
           # write a Windows-native path (pwd -W) so pwsh/go's cgo can resolve zig.exe
           echo "$(pwd -W)/zig-x86_64-windows-${ZIG_VER}" >> "$GITHUB_PATH"
 

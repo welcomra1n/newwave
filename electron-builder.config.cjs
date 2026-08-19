@@ -45,14 +45,16 @@ const config = {
         "dist/schema/**/*", // schema files for Monaco editor
     ],
     mac: {
+        // arm64 only: this fork ships to Apple Silicon machines, and building the x64 slice
+        // as well roughly doubled the mac job.
         target: [
             {
                 target: "zip",
-                arch: ["arm64", "x64"],
+                arch: ["arm64"],
             },
             {
                 target: "dmg",
-                arch: ["arm64", "x64"],
+                arch: ["arm64"],
             },
         ],
         category: "public.app-category.developer-tools",
@@ -83,7 +85,7 @@ const config = {
         afterInstall: "build/deb-postinstall.tpl",
     },
     win: {
-        target: ["nsis", "msi", "zip"],
+        target: ["nsis"], // what electron-updater consumes; msi/zip only cost build time
         signtoolOptions: windowsShouldSign && {
             signingHashAlgorithms: ["sha256"],
             publisherName: "Command Line Inc",
