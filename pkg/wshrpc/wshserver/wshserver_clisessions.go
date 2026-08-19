@@ -58,9 +58,13 @@ func (ws *WshServer) GetCliSessionsCommand(ctx context.Context) ([]wshrpc.CliSes
 	}
 
 	meta := readSessionMeta(home)
+	pending := sweepPendingDeletes(home)
 
 	entries := make([]wshrpc.CliSessionEntry, 0, len(candidates))
 	for _, c := range candidates {
+		if pending[c.filePath] {
+			continue // deleted by the user; the file move is just waiting on the agent to exit
+		}
 		var entry wshrpc.CliSessionEntry
 		var ok bool
 		if c.agent == "claude" {
@@ -544,6 +548,17 @@ func (ws *WshServer) DeleteCliSessionCommand(ctx context.Context, filePath strin
 	if !strings.HasPrefix(abs, claudeRoot) && !strings.HasPrefix(abs, codexRoot) {
 		return os.ErrPermission
 	}
+	if err := moveToTrash(home, abs); err != nil {
+		// Windows refuses to move a file the agent still has open. Record it as pending so
+		// the sidebar drops it now, and retry the move on later list calls.
+		if markErr := addPendingDelete(home, abs); markErr != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func moveToTrash(home string, abs string) error {
 	trashDir := filepath.Join(home, ".newwave", "trash")
 	if err := os.MkdirAll(trashDir, 0o755); err != nil {
 		return err
@@ -554,6 +569,76 @@ func (ws *WshServer) DeleteCliSessionCommand(ctx context.Context, filePath strin
 		dest = filepath.Join(trashDir, filepath.Base(filepath.Dir(abs))+"_"+filepath.Base(abs))
 	}
 	return os.Rename(abs, dest)
+}
+
+// --- deletions that couldn't complete yet: ~/.newwave/pending-delete.json ---
+
+func pendingDeletePath(home string) string {
+	return filepath.Join(home, ".newwave", "pending-delete.json")
+}
+
+func readPendingDeletes(home string) map[string]bool {
+	out := make(map[string]bool)
+	data, err := os.ReadFile(pendingDeletePath(home))
+	if err != nil {
+		return out
+	}
+	var paths []string
+	if json.Unmarshal(data, &paths) != nil {
+		return out
+	}
+	for _, p := range paths {
+		out[p] = true
+	}
+	return out
+}
+
+func writePendingDeletes(home string, set map[string]bool) error {
+	dir := filepath.Join(home, ".newwave")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	paths := make([]string, 0, len(set))
+	for p := range set {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+	data, err := json.MarshalIndent(paths, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(pendingDeletePath(home), data, 0o644)
+}
+
+func addPendingDelete(home string, abs string) error {
+	set := readPendingDeletes(home)
+	set[abs] = true
+	return writePendingDeletes(home, set)
+}
+
+// sweepPendingDeletes retries the moves that were blocked earlier and returns the paths that
+// are still pending, so the caller can keep hiding them from the list.
+func sweepPendingDeletes(home string) map[string]bool {
+	set := readPendingDeletes(home)
+	if len(set) == 0 {
+		return set
+	}
+	changed := false
+	for p := range set {
+		if _, err := os.Stat(p); err != nil {
+			delete(set, p) // already gone
+			changed = true
+			continue
+		}
+		if moveToTrash(home, p) == nil {
+			delete(set, p)
+			changed = true
+		}
+	}
+	if changed {
+		_ = writePendingDeletes(home, set)
+	}
+	return set
 }
 
 func collectClaudeCandidates(home string) []cliSessionCandidate {

@@ -283,6 +283,21 @@ async function deleteSession(filepath: string) {
     await RpcApi.DeleteCliSessionCommand(TabRpcClient, filepath);
 }
 
+// A transcript that an agent still has open can't be moved to trash yet — the process needs
+// a moment to exit after its block closes. Retry a few times before giving up.
+async function deleteSessionWithRetry(filepath: string, hadOpenBlock: boolean) {
+    const attempts = hadOpenBlock ? 5 : 2;
+    for (let i = 0; i < attempts; i++) {
+        try {
+            await deleteSession(filepath);
+            return;
+        } catch (e) {
+            if (i === attempts - 1) throw e;
+            await new Promise((resolve) => setTimeout(resolve, 400));
+        }
+    }
+}
+
 async function assignProject(sessionid: string, project: string) {
     await RpcApi.SetCliSessionMetaCommand(TabRpcClient, { sessionid, project });
 }
@@ -439,10 +454,14 @@ const SessionItem = memo(
 
         const doDelete = useCallback(() => {
             fireAndForget(async () => {
-                // close the open block for this session (if any), then remove the file
+                // close the block first so the agent releases the transcript, then remove it
                 const blockId = findOpenBlockId(session.sessionid);
-                await deleteSession(session.filepath);
                 if (blockId) uxCloseBlock(blockId);
+                try {
+                    await deleteSessionWithRetry(session.filepath, blockId != null);
+                } catch (e) {
+                    console.error("delete session failed", session.filepath, e);
+                }
                 onChanged();
             });
         }, [session.filepath, session.sessionid, onChanged]);
@@ -1010,18 +1029,33 @@ const SessionSidebar = memo(() => {
     // Delete every selected session (files move to trash, not a hard delete) and close any
     // blocks running them. Armed by a first click so a mis-click can't wipe a selection.
     const deleteSelected = useCallback(() => {
-        const ids = Array.from(selected);
-        if (ids.length === 0) return;
         const targets = sessions.filter((s) => selected.has(s.sessionid));
+        if (targets.length === 0) return;
         fireAndForget(async () => {
+            let ok = 0;
+            const failed: string[] = [];
             for (const s of targets) {
+                // close the block first: while the agent still holds the transcript open,
+                // moving it to trash fails on Windows
                 const blockId = findOpenBlockId(s.sessionid);
-                await deleteSession(s.filepath);
                 if (blockId) uxCloseBlock(blockId);
+                try {
+                    await deleteSessionWithRetry(s.filepath, blockId != null);
+                    ok++;
+                } catch (e) {
+                    console.error("delete session failed", s.filepath, e);
+                    failed.push(sessionLabel(s) || s.sessionid);
+                }
             }
             setSelected(new Set());
             setDeleteArmed(false);
-            setNotice(`${targets.length}개 세션을 휴지통으로 옮겼습니다.`);
+            if (failed.length === 0) {
+                setNotice(`${ok}개 세션을 휴지통으로 옮겼습니다.`);
+            } else {
+                setNotice(
+                    `${ok}개 삭제, ${failed.length}개 실패 — ${failed.slice(0, 3).join(", ")}${failed.length > 3 ? " 외" : ""}. 실행 중인 세션은 종료한 뒤 다시 시도하세요.`
+                );
+            }
             load();
         });
     }, [selected, sessions, load]);
