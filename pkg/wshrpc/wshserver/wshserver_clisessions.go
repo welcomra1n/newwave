@@ -554,7 +554,11 @@ func (ws *WshServer) DeleteCliSessionCommand(ctx context.Context, filePath strin
 	if !strings.HasPrefix(abs, claudeRoot) && !strings.HasPrefix(abs, codexRoot) {
 		return os.ErrPermission
 	}
-	if sessionId := sessionIdFromPath(abs); sessionId != "" {
+	// mark before moving: once the file is gone we can no longer read its id
+	for _, sessionId := range sessionIdsForPath(abs) {
+		if sessionId == "" {
+			continue
+		}
 		if err := markSessionDeleted(home, sessionId); err != nil {
 			return err
 		}
@@ -569,14 +573,22 @@ func (ws *WshServer) DeleteCliSessionCommand(ctx context.Context, filePath strin
 	return nil
 }
 
-// sessionIdFromPath recovers the session id a transcript belongs to. Claude names the file
-// after the id; codex rollout files carry it as the trailing uuid.
-func sessionIdFromPath(abs string) string {
+// sessionIdsForPath recovers every id a transcript could be listed under. Claude names the
+// file after the id. Codex takes its id from the session_meta header and only falls back to
+// the filename uuid, so mark both — a mismatch would leave the row visible after deletion.
+func sessionIdsForPath(abs string) []string {
 	base := strings.TrimSuffix(filepath.Base(abs), ".jsonl")
-	if strings.HasPrefix(base, "rollout-") {
-		return codexIdFromFilename(abs)
+	if !strings.HasPrefix(base, "rollout-") {
+		return []string{base}
 	}
-	return base
+	ids := []string{}
+	if entry, ok := parseCodexSession(cliSessionCandidate{agent: "codex", filePath: abs}); ok && entry.SessionId != "" {
+		ids = append(ids, entry.SessionId)
+	}
+	if fromName := codexIdFromFilename(abs); fromName != "" && (len(ids) == 0 || ids[0] != fromName) {
+		ids = append(ids, fromName)
+	}
+	return ids
 }
 
 func markSessionDeleted(home string, sessionId string) error {
