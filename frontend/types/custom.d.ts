@@ -138,6 +138,7 @@ declare global {
         saveTextFile: (fileName: string, content: string) => Promise<boolean>; // save-text-file
         setIsActive: () => Promise<void>; // set-is-active
         setRunningSessions: (names: string[]) => void; // set-running-sessions
+        showSessionNotification: (title: string, body: string) => void; // show-session-notification
     };
 
     type ElectronContextMenuItem = {

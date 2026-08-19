@@ -17,6 +17,7 @@ import {
     openLink,
     WOS,
 } from "@/store/global";
+import { parseResumeId, sessionInfoAtom } from "@/app/workspace/sidebaratoms";
 import {
     clearSessionAttention,
     clearSessionWorking,
@@ -56,6 +57,17 @@ import {
 } from "./termutil";
 
 const dlog = debug("wave:termwrap");
+
+// OS notification naming the session that just finished, so a background window still tells
+// you *which* agent wants you. The chime is played separately (playDoneSound).
+function notifySessionDone(sessionId: string, blockId: string) {
+    const enabled = globalStore.get(getSettingsKeyAtom("term:sessiondonenotify")) ?? true;
+    if (!enabled) return;
+    const info = globalStore.get(sessionInfoAtom).get(sessionId);
+    const blockTitle = globalStore.get(getBlockMetaKeyAtom(blockId, "frame:text")) as string | undefined;
+    const name = info?.alias || blockTitle || info?.title || "세션";
+    getApi().showSessionNotification?.(`작업 완료 — ${name}`, info?.cwd ? `${info.cwd}` : "응답을 기다리는 중");
+}
 
 const TermFileName = "term";
 const TermCacheFileName = "cache:term:full";
@@ -161,11 +173,10 @@ export class TermWrap {
         this.terminal.onBell(() => {
             try {
                 const cmd = globalStore.get(getBlockMetaKeyAtom(this.blockId, "cmd")) as string | undefined;
-                const m = cmd?.match(/(?:--resume|resume)\s+(\S+)/);
-                if (m) {
-                    markSessionAttention(m[1]);
-                    playDoneSound();
-                }
+                const sessionId = parseResumeId(cmd);
+                if (!sessionId) return;
+                markSessionAttention(sessionId);
+                this.announceTurnDone(sessionId);
             } catch {
                 // best-effort
             }
@@ -526,13 +537,23 @@ export class TermWrap {
     private doneTimer: ReturnType<typeof setTimeout> | null = null;
     private wasActive = false;
     private cachedResumeId: string | null | undefined = undefined;
+    private lastDoneAnnounceTs = 0;
 
     private getResumeSessionId(): string | null {
         if (this.cachedResumeId !== undefined) return this.cachedResumeId;
         const cmd = globalStore.get(getBlockMetaKeyAtom(this.blockId, "cmd")) as string | undefined;
-        const m = cmd?.match(/(?:--resume|resume)\s+(\S+)/);
-        this.cachedResumeId = m ? m[1] : null;
+        this.cachedResumeId = parseResumeId(cmd);
         return this.cachedResumeId;
+    }
+
+    // Both the terminal bell and the "output went quiet" detector mean the same thing, so a
+    // turn can trigger twice within a second — announce once.
+    private announceTurnDone(sessionId: string) {
+        const now = Date.now();
+        if (now - this.lastDoneAnnounceTs < 10000) return;
+        this.lastDoneAnnounceTs = now;
+        playDoneSound();
+        notifySessionDone(sessionId, this.blockId);
     }
 
     private notifyWorking() {
@@ -550,7 +571,7 @@ export class TermWrap {
             if (this.wasActive) {
                 this.wasActive = false;
                 markSessionAttention(sid);
-                playDoneSound();
+                this.announceTurnDone(sid);
             }
         }, 3000);
     }

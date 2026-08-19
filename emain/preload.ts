@@ -56,6 +56,7 @@ contextBridge.exposeInMainWorld("api", {
     closeTab: (workspaceId, tabId, confirmClose) => ipcRenderer.invoke("close-tab", workspaceId, tabId, confirmClose),
     setWindowInitStatus: (status) => ipcRenderer.send("set-window-init-status", status),
     setRunningSessions: (names) => ipcRenderer.send("set-running-sessions", names),
+    showSessionNotification: (title, body) => ipcRenderer.send("show-session-notification", title, body),
     onWaveInit: (callback) => ipcRenderer.on("wave-init", (_event, initOpts) => callback(initOpts)),
     onBuilderInit: (callback) => ipcRenderer.on("builder-init", (_event, initOpts) => callback(initOpts)),
     sendLog: (log) => ipcRenderer.send("fe-log", log),

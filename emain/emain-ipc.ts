@@ -458,6 +458,24 @@ export function initIpcHandlers() {
         );
     });
 
+    // "이 세션 작업 끝났다" OS 알림. Renderer can't be trusted to raise one while the window
+    // is in the background, so the main process owns it; clicking focuses the app.
+    electron.ipcMain.on("show-session-notification", (event, title: string, body: string) => {
+        try {
+            const notification = new electron.Notification({ title, body, silent: true });
+            notification.on("click", () => {
+                const win = getWaveWindowByWebContentsId(event.sender.hostWebContents?.id ?? event.sender.id);
+                if (win == null) return;
+                if (win.isMinimized()) win.restore();
+                win.show();
+                win.focus();
+            });
+            notification.show();
+        } catch (e) {
+            console.error("failed to show session notification", e);
+        }
+    });
+
     // sidebar pushes up which agent sessions are mid-turn / live, for the quit warning
     electron.ipcMain.on("set-running-sessions", (_event, names: string[]) => {
         setRunningSessionNames(names);

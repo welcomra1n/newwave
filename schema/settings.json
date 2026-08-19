@@ -113,6 +113,9 @@
         "term:theme": {
           "type": "string"
         },
+        "term:sessiondonenotify": {
+          "type": "boolean"
+        },
         "term:usermsghighlight": {
           "type": "boolean"
         },

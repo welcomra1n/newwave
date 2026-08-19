@@ -43,6 +43,7 @@ const (
 	ConfigKey_TermFontSize               = "term:fontsize"
 	ConfigKey_TermFontFamily             = "term:fontfamily"
 	ConfigKey_TermTheme                  = "term:theme"
+	ConfigKey_TermSessionDoneNotify      = "term:sessiondonenotify"
 	ConfigKey_TermUserMsgHighlight       = "term:usermsghighlight"
 	ConfigKey_TermUserMsgBg              = "term:usermsgbg"
 	ConfigKey_TermUserMsgColor           = "term:usermsgcolor"
