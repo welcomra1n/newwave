@@ -65,6 +65,14 @@ func (ws *WshServer) GetCliSessionsCommand(ctx context.Context) ([]wshrpc.CliSes
 		if pending[c.filePath] {
 			continue // deleted by the user; the file move is just waiting on the agent to exit
 		}
+		// A running agent recreates the transcript right after we move it away. Once the user
+		// has deleted a session, drop any file that comes back so the source folder stays clean.
+		if isDeletedSessionFile(meta, c) {
+			if err := os.Remove(c.filePath); err != nil {
+				addPendingDelete(home, c.filePath) //nolint:errcheck // retried next listing
+			}
+			continue
+		}
 		var entry wshrpc.CliSessionEntry
 		var ok bool
 		if c.agent == "claude" {
@@ -562,6 +570,8 @@ func (ws *WshServer) DeleteCliSessionCommand(ctx context.Context, filePath strin
 		if err := markSessionDeleted(home, sessionId); err != nil {
 			return err
 		}
+		// a live agent keeps writing (and recreating) the transcript — stop it, best effort
+		_ = ws.KillLiveSessionCommand(ctx, sessionId)
 	}
 	if err := moveToTrash(home, abs); err != nil {
 		// Windows refuses to move a file the agent still has open. Record it as pending so
@@ -571,6 +581,16 @@ func (ws *WshServer) DeleteCliSessionCommand(ctx context.Context, filePath strin
 		}
 	}
 	return nil
+}
+
+// isDeletedSessionFile reports whether a transcript belongs to a session the user deleted.
+func isDeletedSessionFile(meta map[string]sessionMeta, c cliSessionCandidate) bool {
+	for _, id := range sessionIdsForPath(c.filePath) {
+		if id != "" && meta[id].Deleted {
+			return true
+		}
+	}
+	return false
 }
 
 // sessionIdsForPath recovers every id a transcript could be listed under. Claude names the

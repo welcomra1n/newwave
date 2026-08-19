@@ -782,8 +782,6 @@ const SessionSidebar = memo(() => {
     const [liveHosts, setLiveHosts] = useState<Map<string, LiveSessionEntry>>(new Map());
     // transient notice banner (e.g. clicking an already-running session)
     const [notice, setNotice] = useState("");
-    // bulk delete is two-step: the button arms itself, a second click within a few seconds runs it
-    const [deleteArmed, setDeleteArmed] = useState(false);
 
     const toggleSelect = useCallback((sessionid: string) => {
         setSelected((prev) => {
@@ -850,13 +848,6 @@ const SessionSidebar = memo(() => {
             clearInterval(t);
         };
     }, [listVersion]);
-
-    // an armed delete disarms itself, so a stale "N개 삭제?" can't be hit much later
-    useEffect(() => {
-        if (!deleteArmed) return;
-        const t = setTimeout(() => setDeleteArmed(false), 4000);
-        return () => clearTimeout(t);
-    }, [deleteArmed]);
 
     // auto-dismiss the notice banner
     useEffect(() => {
@@ -1048,7 +1039,6 @@ const SessionSidebar = memo(() => {
                 }
             }
             setSelected(new Set());
-            setDeleteArmed(false);
             if (failed.length === 0) {
                 setNotice(`${ok}개 세션을 휴지통으로 옮겼습니다.`);
             } else {
@@ -1411,23 +1401,17 @@ const SessionSidebar = memo(() => {
                     </button>
                     <button
                         type="button"
-                        className={clsx(
-                            "text-[11px] cursor-pointer",
-                            deleteArmed ? "text-red-400 font-semibold" : "text-secondary hover:text-red-400"
-                        )}
-                        title="선택한 세션을 휴지통으로 이동"
-                        onClick={() => (deleteArmed ? deleteSelected() : setDeleteArmed(true))}
+                        className="text-[11px] text-red-400 hover:brightness-125 cursor-pointer"
+                        title="선택한 세션 삭제 (휴지통으로 이동)"
+                        onClick={deleteSelected}
                         style={{ whiteSpace: "nowrap" }}
                     >
-                        {deleteArmed ? `${selected.size}개 삭제?` : "삭제"}
+                        삭제
                     </button>
                     <button
                         type="button"
                         className="text-[11px] text-secondary hover:text-white cursor-pointer"
-                        onClick={() => {
-                            setSelected(new Set());
-                            setDeleteArmed(false);
-                        }}
+                        onClick={() => setSelected(new Set())}
                     >
                         해제
                     </button>
