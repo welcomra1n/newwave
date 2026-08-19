@@ -68,6 +68,17 @@ const bgPresets: { label: string; value: string | null }[] = [
     { label: "회색", value: "#4b5563" },
 ];
 
+// The delete RPC takes the transcript path, which only the session list knows.
+async function findSessionFilePath(sessionId: string): Promise<string | null> {
+    try {
+        const sessions = await RpcApi.GetCliSessionsCommand(TabRpcClient);
+        return sessions?.find((s) => s.sessionid === sessionId)?.filepath ?? null;
+    } catch (e) {
+        console.error("could not look up session file", e);
+        return null;
+    }
+}
+
 function handleHeaderContextMenu(
     e: React.MouseEvent<HTMLDivElement>,
     blockId: string,
@@ -106,13 +117,30 @@ function handleHeaderContextMenu(
             })),
         }
     );
-    menu.push(
-        { type: "separator" },
-        {
-            label: "Close Block",
-            click: () => uxCloseBlock(blockId),
-        }
-    );
+    // session blocks (claude/codex resume) can be thrown away from here too — otherwise the
+    // only way to delete the transcript was to find the row again in the sidebar
+    const cmd = globalStore.get(getBlockMetaKeyAtom(blockId, "cmd")) as string | undefined;
+    const sessionId = parseResumeId(cmd);
+    menu.push({ type: "separator" });
+    if (sessionId) {
+        menu.push({
+            label: "세션 삭제 (휴지통) 후 닫기",
+            click: () => {
+                util.fireAndForget(async () => {
+                    const filePath = await findSessionFilePath(sessionId);
+                    if (filePath) {
+                        await RpcApi.DeleteCliSessionCommand(TabRpcClient, filePath);
+                        bumpSessionList();
+                    }
+                    uxCloseBlock(blockId);
+                });
+            },
+        });
+    }
+    menu.push({
+        label: "Close Block",
+        click: () => uxCloseBlock(blockId),
+    });
     blockEnv.showContextMenu(menu, e);
 }
 
