@@ -76,6 +76,9 @@ func (ws *WshServer) GetCliSessionsCommand(ctx context.Context) ([]wshrpc.CliSes
 			continue
 		}
 		if m, found := meta[entry.SessionId]; found {
+			if m.Deleted {
+				continue // user deleted it; a running agent may have recreated the file
+			}
 			entry.Alias = m.Alias
 			entry.Pinned = m.Pinned
 			entry.Color = m.Color
@@ -405,6 +408,9 @@ type sessionMeta struct {
 	Pinned  bool   `json:"pinned,omitempty"`
 	Color   string `json:"color,omitempty"`
 	Project string `json:"project,omitempty"`
+	// Deleted sessions stay hidden even if the agent recreates the transcript file,
+	// which a running claude does as soon as it appends its next line.
+	Deleted bool `json:"deleted,omitempty"`
 }
 
 func sessionMetaPath(home string) string {
@@ -456,7 +462,7 @@ func (ws *WshServer) SetCliSessionMetaCommand(ctx context.Context, data wshrpc.C
 	if data.Project != nil {
 		m.Project = strings.TrimSpace(*data.Project)
 	}
-	if m.Alias == "" && !m.Pinned && m.Color == "" && m.Project == "" {
+	if m.Alias == "" && !m.Pinned && m.Color == "" && m.Project == "" && !m.Deleted {
 		delete(meta, data.SessionId) // no metadata left -> drop entry
 	} else {
 		meta[data.SessionId] = m
@@ -478,7 +484,7 @@ func (ws *WshServer) SetCliSessionsProjectCommand(ctx context.Context, data wshr
 		}
 		m := meta[id]
 		m.Project = proj
-		if m.Alias == "" && !m.Pinned && m.Color == "" && m.Project == "" {
+		if m.Alias == "" && !m.Pinned && m.Color == "" && m.Project == "" && !m.Deleted {
 			delete(meta, id)
 		} else {
 			meta[id] = m
@@ -548,6 +554,11 @@ func (ws *WshServer) DeleteCliSessionCommand(ctx context.Context, filePath strin
 	if !strings.HasPrefix(abs, claudeRoot) && !strings.HasPrefix(abs, codexRoot) {
 		return os.ErrPermission
 	}
+	if sessionId := sessionIdFromPath(abs); sessionId != "" {
+		if err := markSessionDeleted(home, sessionId); err != nil {
+			return err
+		}
+	}
 	if err := moveToTrash(home, abs); err != nil {
 		// Windows refuses to move a file the agent still has open. Record it as pending so
 		// the sidebar drops it now, and retry the move on later list calls.
@@ -556,6 +567,24 @@ func (ws *WshServer) DeleteCliSessionCommand(ctx context.Context, filePath strin
 		}
 	}
 	return nil
+}
+
+// sessionIdFromPath recovers the session id a transcript belongs to. Claude names the file
+// after the id; codex rollout files carry it as the trailing uuid.
+func sessionIdFromPath(abs string) string {
+	base := strings.TrimSuffix(filepath.Base(abs), ".jsonl")
+	if strings.HasPrefix(base, "rollout-") {
+		return codexIdFromFilename(abs)
+	}
+	return base
+}
+
+func markSessionDeleted(home string, sessionId string) error {
+	meta := readSessionMeta(home)
+	m := meta[sessionId]
+	m.Deleted = true
+	meta[sessionId] = m
+	return writeSessionMeta(home, meta)
 }
 
 func moveToTrash(home string, abs string) error {
