@@ -3,14 +3,15 @@
 
 import { Block } from "@/app/block/block";
 import { CenteredDiv } from "@/element/quickelems";
-import { ContentRenderer, NodeModel, PreviewRenderer, TileLayout } from "@/layout/index";
+import { ContentRenderer, getLayoutModelForTabById, NodeModel, PreviewRenderer, TileLayout } from "@/layout/index";
 import { TileLayoutContents } from "@/layout/lib/types";
 import { atoms, getApi } from "@/store/global";
+import { fireAndForget } from "@/util/util";
 import * as services from "@/store/services";
 import * as WOS from "@/store/wos";
 import { atom, useAtomValue } from "jotai";
 import * as React from "react";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 
 const tileGapSizeAtom = atom((get) => {
     const settings = get(atoms.settingsAtom);
@@ -46,6 +47,18 @@ const TabContent = React.memo(({ tabId, noTopPadding }: { tabId: string; noTopPa
             gapSizePx: tileGapSize,
         } as TileLayoutContents;
     }, [tabId, tileGapSize]);
+
+    // Self-heal: a block close that only half-completed leaves a layout node behind whose block
+    // is gone. It renders as an empty column and squeezes the surviving blocks, so drop it.
+    useEffect(() => {
+        if (!tabData?.blockids) return;
+        const layoutModel = getLayoutModelForTabById(tabId);
+        if (!layoutModel) return;
+        fireAndForget(async () => {
+            const removed = await layoutModel.pruneStaleNodes(tabData.blockids);
+            if (removed > 0) layoutModel.onTreeStateAtomUpdated(true);
+        });
+    }, [tabId, tabData?.blockids]);
 
     let innerContent;
 

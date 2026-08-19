@@ -713,6 +713,32 @@ export class LayoutModel {
     }
 
     /**
+     * Drop leaves that point at blocks the tab no longer has. Such nodes render as dead space
+     * and squeeze the real blocks, which is what a half-finished block close leaves behind.
+     * @param liveBlockIds The block ids the tab still owns.
+     * @returns The number of nodes removed.
+     */
+    async pruneStaleNodes(liveBlockIds: string[]): Promise<number> {
+        const live = new Set(liveBlockIds ?? []);
+        const staleNodeIds: string[] = [];
+        walkNodes(this.treeState.rootNode, (node) => {
+            const blockId = node.data?.blockId;
+            if (node.children?.length) return;
+            if (blockId && !live.has(blockId)) staleNodeIds.push(node.id);
+        });
+        for (const nodeId of staleNodeIds) {
+            const node = findNode(this.treeState.rootNode, nodeId);
+            if (!node) continue;
+            if (nodeId === this.magnifiedNodeId) this.magnifyNodeToggle(nodeId);
+            this.treeReducer({ type: LayoutTreeActionType.DeleteNode, nodeId } as LayoutTreeDeleteNodeAction);
+        }
+        if (staleNodeIds.length > 0) {
+            console.warn(`layout: removed ${staleNodeIds.length} node(s) pointing at deleted blocks`);
+        }
+        return staleNodeIds.length;
+    }
+
+    /**
      * Set the upstream tree state atom to the value of the local tree state.
      * @param bumpGeneration Whether to bump the generation of the tree state before setting the atom.
      */
