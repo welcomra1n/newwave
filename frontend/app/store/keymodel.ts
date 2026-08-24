@@ -3,6 +3,7 @@
 
 import { WaveAIModel } from "@/app/aipanel/waveai-model";
 import { FocusManager } from "@/app/store/focusManager";
+import { focusNextWaitingSession } from "@/app/workspace/sessionsidebar";
 import { sessionSidebarCollapsedAtom } from "@/app/workspace/sidebaratoms";
 import {
     atoms,
@@ -554,6 +555,12 @@ function registerGlobalKeys() {
     // Cmd/Ctrl + backtick — VSCode-style panel toggle (plain ` can't be used: the
     // terminal captures printable keys, and it'd break typing backticks in the shell).
     globalKeyMap.set("Cmd:`", toggleSessionSidebar);
+    // Jump to the session that finished while you were doing something else — the whole point
+    // of the completion alert is getting back to that session, so make it one key.
+    globalKeyMap.set("Cmd:Shift:j", () => {
+        focusNextWaitingSession();
+        return true;
+    });
     const magnifyFocused = () => {
         const layoutModel = getLayoutModelForStaticTab();
         const focusedNode = globalStore.get(layoutModel.focusedNode);

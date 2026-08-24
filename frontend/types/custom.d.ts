@@ -139,6 +139,7 @@ declare global {
         setIsActive: () => Promise<void>; // set-is-active
         setRunningSessions: (names: string[]) => void; // set-running-sessions
         showSessionNotification: (title: string, body: string) => void; // show-session-notification
+        setWaitingCount: (count: number) => void; // set-waiting-count
     };
 
     type ElectronContextMenuItem = {

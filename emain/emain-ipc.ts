@@ -460,6 +460,16 @@ export function initIpcHandlers() {
 
     // "이 세션 작업 끝났다" OS 알림. Renderer can't be trusted to raise one while the window
     // is in the background, so the main process owns it; clicking focuses the app.
+    // Number of sessions waiting on the user, shown on the taskbar icon so a glance at the
+    // taskbar tells you whether to switch back.
+    electron.ipcMain.on("set-waiting-count", (_event, count: number) => {
+        try {
+            electronApp.setBadgeCount(typeof count === "number" && count > 0 ? count : 0);
+        } catch (e) {
+            console.error("failed to set waiting badge", e);
+        }
+    });
+
     electron.ipcMain.on("show-session-notification", (event, title: string, body: string) => {
         try {
             // Looking at the app already? The chime and the sidebar badge are enough — a popup
@@ -467,6 +477,10 @@ export function initIpcHandlers() {
             if (electron.BrowserWindow.getFocusedWindow() != null) {
                 return;
             }
+            // Working in another app: flash the taskbar so the finished session is noticeable
+            // without a popup covering whatever is on screen.
+            const win = getWaveWindowByWebContentsId(event.sender.hostWebContents?.id ?? event.sender.id);
+            win?.flashFrame(true);
             const notification = new electron.Notification({ title, body, silent: true });
             notification.on("click", () => {
                 const win = getWaveWindowByWebContentsId(event.sender.hostWebContents?.id ?? event.sender.id);
