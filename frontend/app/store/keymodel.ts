@@ -557,7 +557,7 @@ function registerGlobalKeys() {
     globalKeyMap.set("Cmd:`", toggleSessionSidebar);
     // Jump to the session that finished while you were doing something else — the whole point
     // of the completion alert is getting back to that session, so make it one key.
-    globalKeyMap.set("Cmd:j", () => {
+    globalKeyMap.set("Cmd:Shift:j", () => {
         focusNextWaitingSession();
         return true;
     });
