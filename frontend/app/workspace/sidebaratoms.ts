@@ -22,6 +22,9 @@ export type SessionStatusFilter = "all" | "waiting" | "working" | "open" | "live
 export const sessionSortAtom = atomWithStorage<SessionSort>("newwave:sidebar:sort", "recent");
 export const sessionStatusFilterAtom = atomWithStorage<SessionStatusFilter>("newwave:sidebar:status", "all");
 
+// Raycast-style jump palette (search + waiting sessions), opened by keybinding.
+export const sessionPaletteOpenAtom = atom(false);
+
 // --- session activity ---
 
 // Session ids whose agent finished a turn and is waiting on the user.

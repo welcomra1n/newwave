@@ -183,44 +183,10 @@ function findOpenBlockId(sessionid: string): string | null {
     return null;
 }
 
-// Jump to a session that finished while you were elsewhere: focus its open block, or open it
-// if the block was closed. Returns false when nothing is waiting.
-export function focusNextWaitingSession(): boolean {
-    const waiting = globalStore.get(sessionAttentionAtom);
-    if (waiting.size === 0) return false;
-    const info = globalStore.get(sessionInfoAtom);
-    // oldest first — the one that has been sitting unanswered the longest
-    const ids = Array.from(waiting).sort((a, b) => (info.get(a)?.mtime ?? 0) - (info.get(b)?.mtime ?? 0));
-    for (const sessionid of ids) {
-        const blockId = findOpenBlockId(sessionid);
-        if (blockId) {
-            clearSessionAttention(sessionid);
-            refocusNode(blockId);
-            return true;
-        }
-    }
-    // nothing open anymore — reopen the oldest waiting session from its transcript
-    const sessionid = ids[0];
-    const brief = info.get(sessionid);
-    clearSessionAttention(sessionid);
-    fireAndForget(() =>
-        createBlock({
-            meta: {
-                view: "term",
-                controller: "cmd",
-                cmd: `claude --resume ${sessionid}`,
-                "cmd:cwd": brief?.cwd || undefined,
-                ...(brief?.alias ? { "frame:text": brief.alias } : {}),
-            },
-        })
-    );
-    return true;
-}
-
 // Last working dir a session was opened in — reused as the default cwd for "새 세션".
 let lastSessionCwd: string | undefined;
 
-function openSession(s: CliSessionEntry) {
+export function openSession(s: CliSessionEntry) {
     clearSessionAttention(s.sessionid); // opening = acknowledged
     if (s.cwd) lastSessionCwd = s.cwd;
     // already open -> just focus it, don't spawn a duplicate block
