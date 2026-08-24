@@ -462,6 +462,11 @@ export function initIpcHandlers() {
     // is in the background, so the main process owns it; clicking focuses the app.
     electron.ipcMain.on("show-session-notification", (event, title: string, body: string) => {
         try {
+            // Looking at the app already? The chime and the sidebar badge are enough — a popup
+            // would just cover the terminal you are reading.
+            if (electron.BrowserWindow.getFocusedWindow() != null) {
+                return;
+            }
             const notification = new electron.Notification({ title, body, silent: true });
             notification.on("click", () => {
                 const win = getWaveWindowByWebContentsId(event.sender.hostWebContents?.id ?? event.sender.id);
