@@ -208,7 +208,13 @@ export function openSession(s: CliSessionEntry) {
             "cmd:cwd": s.cwd || undefined,
             // carry the custom name + color into the block header
             ...(s.alias ? { "frame:text": s.alias } : {}),
-            ...(s.color ? { "frame:text:bg": s.color } : {}),
+            ...(s.color
+                ? {
+                      "frame:text:bg": s.color,
+                      "frame:bordercolor": s.color,
+                      "frame:activebordercolor": s.color,
+                  }
+                : {}),
         },
     };
     fireAndForget(() => createBlock(blockDef));
@@ -270,7 +276,7 @@ const CodexIcon = memo(({ size = 14 }: { size?: number }) => (
 ));
 CodexIcon.displayName = "CodexIcon";
 
-const AgentIcon = memo(({ agent }: { agent: string }) => (agent === "claude" ? <ClaudeIcon /> : <CodexIcon />));
+export const AgentIcon = memo(({ agent }: { agent: string }) => (agent === "claude" ? <ClaudeIcon /> : <CodexIcon />));
 AgentIcon.displayName = "AgentIcon";
 
 // --- session mutations ---
@@ -329,32 +335,34 @@ const StatusCapsule = memo(
         done,
         live,
         liveHost,
+        compact,
     }: {
         active: boolean;
         working: boolean;
         done: boolean;
         live: boolean;
         liveHost?: LiveSessionEntry;
+        compact?: boolean;
     }) => {
         if (active && working)
             return (
-                <span className="baw-cap cap-work" title="작업 중">
+                <span className={clsx("baw-cap cap-work", compact && "cap-compact")} title="작업 중">
                     <i className="fa fa-solid fa-spinner fa-spin" />
-                    작업
+                    {!compact && "작업"}
                 </span>
             );
         if (active && done)
             return (
-                <span className="baw-cap cap-wait" title="응답 대기">
+                <span className={clsx("baw-cap cap-wait", compact && "cap-compact")} title="응답 대기">
                     <i className="fa fa-solid fa-pause" />
-                    대기
+                    {!compact && "대기"}
                 </span>
             );
         if (active)
             return (
-                <span className="baw-cap cap-open" title="열림">
+                <span className={clsx("baw-cap cap-open", compact && "cap-compact")} title="열림">
                     <span className="dot" />
-                    열림
+                    {!compact && "열림"}
                 </span>
             );
         if (live) {
@@ -367,15 +375,15 @@ const StatusCapsule = memo(
             const icon = isBg ? "fa-robot" : inApp ? "fa-window-maximize" : "fa-arrow-up-right-from-square";
             return (
                 <span
-                    className="baw-cap cap-run"
+                    className={clsx("baw-cap cap-run", compact && "cap-compact")}
                     title={`실행 중 · ${host}${inApp || isBg ? "" : " (이 앱 밖)"}${statusText}`}
                 >
                     <i className={clsx("fa fa-solid", icon)} />
-                    실행중
+                    {!compact && "실행중"}
                 </span>
             );
         }
-        return (
+        return compact ? null : (
             <span className="baw-cap cap-closed" title="닫힘">
                 닫힘
             </span>
@@ -394,6 +402,7 @@ const SessionItem = memo(
         searchSnippet,
         live,
         liveHost,
+        compact,
         onLiveClick,
         projects,
         selected,
@@ -409,6 +418,7 @@ const SessionItem = memo(
         searchSnippet?: string;
         live: boolean;
         liveHost?: LiveSessionEntry;
+        compact: boolean;
         onLiveClick: (s: CliSessionEntry) => void;
         projects: string[];
         selected: boolean;
@@ -492,6 +502,20 @@ const SessionItem = memo(
             (c: string) => {
                 fireAndForget(async () => {
                     await RpcApi.SetCliSessionMetaCommand(TabRpcClient, { sessionid: session.sessionid, color: c });
+                    // push it onto the open block right away, including the frame outline;
+                    // an empty color clears all three so "없음" really goes back to default
+                    const blockId = findOpenBlockId(session.sessionid);
+                    if (blockId) {
+                        const value = c || null;
+                        await RpcApi.SetMetaCommand(TabRpcClient, {
+                            oref: WOS.makeORef("block", blockId),
+                            meta: {
+                                "frame:text:bg": value,
+                                "frame:bordercolor": value,
+                                "frame:activebordercolor": value,
+                            },
+                        });
+                    }
                     onChanged();
                 });
             },
@@ -639,12 +663,23 @@ const SessionItem = memo(
                         )}
                     </div>
                 )}
-                {/* fixed-width status column so the row never shifts as the state changes */}
-                <div className="w-[54px] shrink-0 flex justify-start">
-                    <StatusCapsule active={active} working={working} done={done} live={live} liveHost={liveHost} />
+                {/* fixed-width status column so the row never shifts as the state changes.
+                    A narrow sidebar drops to icon-only (and hides the age) so the title keeps its room. */}
+                <div className={clsx("shrink-0 flex justify-start", compact ? "w-[16px]" : "w-[54px]")}>
+                    <StatusCapsule
+                        active={active}
+                        working={working}
+                        done={done}
+                        live={live}
+                        liveHost={liveHost}
+                        compact={compact}
+                    />
                 </div>
-                {/* fixed-width time column */}
-                <span className="w-[34px] shrink-0 text-right text-[10px] text-muted">{relTime(session.mtime)}</span>
+                {!compact && (
+                    <span className="w-[34px] shrink-0 text-right text-[10px] text-muted">
+                        {relTime(session.mtime)}
+                    </span>
+                )}
                 {/* hover quick actions — absolute overlay so it doesn't reflow the columns */}
                 <div className="hidden group-hover:flex items-center gap-2.5 absolute right-1.5 top-1/2 -translate-y-1/2 bg-black/75 px-2 py-1 rounded-md">
                     <button
@@ -893,7 +928,11 @@ const SessionSidebar = memo(() => {
             const curText = globalStore.get(getBlockMetaKeyAtom(blockId, "frame:text"));
             if (s.alias && curText !== s.alias) meta["frame:text"] = s.alias;
             const curBg = globalStore.get(getBlockMetaKeyAtom(blockId, "frame:text:bg"));
-            if (s.color && curBg !== s.color) meta["frame:text:bg"] = s.color;
+            if (s.color && curBg !== s.color) {
+                meta["frame:text:bg"] = s.color;
+                meta["frame:bordercolor"] = s.color;
+                meta["frame:activebordercolor"] = s.color;
+            }
             if (Object.keys(meta).length > 0) {
                 fireAndForget(() =>
                     RpcApi.SetMetaCommand(TabRpcClient, { oref: WOS.makeORef("block", blockId), meta })
@@ -1170,6 +1209,8 @@ const SessionSidebar = memo(() => {
     const groupOrder = [...projects, UNGROUPED];
 
     const selectedIds = Array.from(selected);
+    // below this width the status label + age squeeze the title into nothing
+    const compactRows = width < 250;
     const renderItems = (items: CliSessionEntry[]) => {
         let lastBucket: string | null = null;
         return items.map((s, i) => {
@@ -1201,6 +1242,7 @@ const SessionSidebar = memo(() => {
                         searchSnippet={contentMatches?.get(s.sessionid) || undefined}
                         live={liveIds.has(s.sessionid)}
                         liveHost={liveHosts.get(s.sessionid)}
+                        compact={compactRows}
                         onLiveClick={(sess) =>
                             setNotice(
                                 `"${sess.alias || sess.title || "세션"}"은(는) 이미 실행 중입니다. 우클릭 → 세션 종료로 정리하거나, 복사본으로 열기(fork)로 별도 사본을 열 수 있어요.`

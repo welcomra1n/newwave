@@ -45,7 +45,13 @@ function setBlockMeta(blockId: string, meta: MetaType) {
 // Set the header background color on the block, and (if it is a resumed CLI
 // session) persist the color to the session so the sidebar reflects it too.
 function applyHeaderColor(blockId: string, color: string | null) {
-    setBlockMeta(blockId, { "frame:text:bg": color });
+    // color the frame too — a tinted title bar alone is easy to miss when several small
+    // blocks are tiled, the outline is what actually reads at a glance
+    setBlockMeta(blockId, {
+        "frame:text:bg": color,
+        "frame:bordercolor": color,
+        "frame:activebordercolor": color,
+    });
     const cmd = globalStore.get(getBlockMetaKeyAtom(blockId, "cmd")) as string | undefined;
     const sid = parseResumeId(cmd);
     if (sid) {

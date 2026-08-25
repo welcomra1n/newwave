@@ -138,3 +138,11 @@
 .session-wait-row {
     animation: session-wait-glow 1.3s ease-in-out infinite;
 }
+
+/* narrow sidebar: capsule shrinks to the colored icon so the title keeps the width */
+.baw-cap.cap-compact {
+    padding: 2px;
+    min-width: 0;
+    gap: 0;
+    justify-content: center;
+}

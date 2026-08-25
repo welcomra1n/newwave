@@ -11,7 +11,7 @@ import { fireAndForget } from "@/util/util";
 import clsx from "clsx";
 import { useAtom, useAtomValue } from "jotai";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { openSession } from "./sessionsidebar";
+import { AgentIcon, openSession } from "./sessionsidebar";
 import { clearSessionAttention, sessionAttentionAtom, sessionPaletteOpenAtom, sessionWorkingAtom } from "./sidebaratoms";
 
 type Scope = "waiting" | "all";
@@ -182,6 +182,7 @@ export const SessionPalette = memo(() => {
                                 ) : (
                                     <i className="fa fa-solid fa-circle text-white/15 text-[7px] shrink-0" />
                                 )}
+                                <AgentIcon agent={s.agent} />
                                 <div className="min-w-0 flex-1">
                                     <div className="text-xs text-white truncate">{label(s)}</div>
                                     {s.lastmsg && (
