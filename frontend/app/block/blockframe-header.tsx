@@ -24,6 +24,7 @@ import { uxCloseBlock } from "@/app/store/keymodel";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { useWaveEnv } from "@/app/waveenv/waveenv";
+import { openColorPicker } from "@/app/workspace/colorpicker";
 import { bumpSessionList } from "@/app/workspace/sessionsidebar";
 import { parseResumeId } from "@/app/workspace/sidebaratoms";
 import { IconButton } from "@/element/iconbutton";
@@ -117,10 +118,22 @@ function handleHeaderContextMenu(
         { label: "이름 변경", click: () => globalStore.set(renamingBlockAtom, blockId) },
         {
             label: "제목 배경색",
-            submenu: bgPresets.map((p) => ({
-                label: p.label,
-                click: () => applyHeaderColor(blockId, p.value),
-            })),
+            submenu: [
+                {
+                    label: "직접 고르기…",
+                    click: () =>
+                        openColorPicker({
+                            title: "제목 배경색",
+                            current: (globalStore.get(getBlockMetaKeyAtom(blockId, "frame:text:bg")) as string) || null,
+                            apply: (c) => applyHeaderColor(blockId, c),
+                        }),
+                },
+                { type: "separator" as const },
+                ...bgPresets.map((p) => ({
+                    label: p.label,
+                    click: () => applyHeaderColor(blockId, p.value),
+                })),
+            ],
         }
     );
     // session blocks (claude/codex resume) can be thrown away from here too — otherwise the

@@ -17,6 +17,7 @@ import { fireAndForget } from "@/util/util";
 import clsx from "clsx";
 import { atom, useAtom, useAtomValue, useSetAtom } from "jotai";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { openColorPicker } from "./colorpicker";
 import { ConnManagerModal, connManagerOpenAtom } from "./connmanager";
 import {
     clearSessionAttention,
@@ -534,6 +535,16 @@ const SessionItem = memo(
                     })),
                 ];
                 const colorMenu: ContextMenuItem[] = [
+                    {
+                        label: "직접 고르기…",
+                        click: () =>
+                            openColorPicker({
+                                title: "세션 색상",
+                                current: session.color || null,
+                                apply: (c) => setColor(c ?? ""),
+                            }),
+                    },
+                    { type: "separator" },
                     { label: (session.color ? "" : "✓ ") + "없음", click: () => setColor("") },
                     { type: "separator" },
                     ...SESSION_COLORS.map((c) => ({

@@ -8,6 +8,7 @@ import { ModalsRenderer } from "@/app/modals/modalsrenderer";
 import { TabBar } from "@/app/tab/tabbar";
 import { TabContent } from "@/app/tab/tabcontent";
 import { VTabBar } from "@/app/tab/vtabbar";
+import { ColorPickerModal } from "@/app/workspace/colorpicker";
 import { SessionPalette } from "@/app/workspace/sessionpalette";
 import { SessionSidebar, sessionSidebarVisibleAtom } from "@/app/workspace/sessionsidebar";
 import { Widgets } from "@/app/workspace/widgets";
@@ -117,6 +118,7 @@ const WorkspaceElem = memo(() => {
             <div ref={panelContainerRef} className="flex flex-row flex-grow overflow-hidden">
                 {sessionSidebarVisible && <SessionSidebar />}
                 <SessionPalette />
+                <ColorPickerModal />
                 <ErrorBoundary key={tabId}>
                     <PanelGroup
                         direction="horizontal"
