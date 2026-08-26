@@ -32,17 +32,28 @@ function rowText(line: IBufferLine | undefined): string {
     return line ? line.translateToString(true) : "";
 }
 
+// A URL that reaches the end of the row it started on.
+const URL_TAIL_RE = /(?:https?:\/\/|file:\/\/)[^\s"'`<>]*$/;
+// A row that is nothing but URL characters — the tail half of a split link. Requiring the
+// whole row to be space-free keeps ordinary prose after a URL from being swallowed.
+const URL_CONT_RE = /^[A-Za-z0-9._~:/?#[\]@!$&'()*+,;=%-]+$/;
+
+// True when `text` continues a URL that `prevText` left unfinished. Content-based on
+// purpose: agent TUIs wrap at their own width, so "did the row fill the terminal" is false
+// for them and their split links never got joined.
+export function continuesUrl(prevText: string, text: string): boolean {
+    if (!prevText || !text) return false;
+    if (!URL_TAIL_RE.test(prevText)) return false;
+    return URL_CONT_RE.test(text);
+}
+
 // True when `absLine` continues the text of the row above it.
 function continuesPrevRow(term: Terminal, absLine: number): boolean {
     const line = term.buffer.active.getLine(absLine);
     const prev = term.buffer.active.getLine(absLine - 1);
     if (!line || !prev) return false;
     if (line.isWrapped) return true;
-    // hard-wrapped by the app: previous row filled the width, this one starts mid-token
-    const prevText = prev.translateToString(false);
-    if (prevText.length < term.cols || prevText.endsWith(" ")) return false;
-    const text = line.translateToString(true);
-    return text.length > 0 && !text.startsWith(" ");
+    return continuesUrl(prev.translateToString(true), line.translateToString(true));
 }
 
 // Collect the full logical line containing `absLine`, walking both directions.
@@ -72,7 +83,16 @@ function mapIndex(rows: RowText[], idx: number): { absLine: number; col: number 
     return null;
 }
 
+// One provider per terminal. A block that gets re-created (remount, renderer swap) used to
+// stack providers, and every extra one reported the same link again — which is how a single
+// click ended up launching two browsers.
+const registeredTerminals = new WeakSet<Terminal>();
+
 export function registerTermLinkProvider(term: Terminal, handlers: TermLinkHandlers): IDisposable {
+    if (registeredTerminals.has(term)) {
+        return { dispose: () => {} };
+    }
+    registeredTerminals.add(term);
     return term.registerLinkProvider({
         provideLinks(y: number, callback: (links: ILink[] | undefined) => void) {
             const viewportY = term.buffer.active.viewportY;

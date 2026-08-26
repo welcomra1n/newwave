@@ -67,6 +67,9 @@ function resolveBrowserPath(browser: string): string | null {
 }
 
 let webviewFocusId: number = null;
+// de-dupes a link that gets reported twice in the same instant (double provider, double click)
+let lastExternalUrl: string = "";
+let lastExternalOpenTs = 0;
 let webviewKeys: string[] = [];
 
 export function openBuilderWindow(appId?: string) {
@@ -235,6 +238,16 @@ export function initIpcHandlers() {
             console.error("Invalid URL received in open-external event:", url);
             return;
         }
+        // last line of defence against a quoted URL ("https://… ) reaching the browser as a
+        // search term — the renderer trims these too, but this path is also used by other code
+        url = url.trim().replace(/^["'`<([]+/, "").replace(/["'`>)\].,]+$/, "");
+        // one link click must open exactly one browser
+        const now = Date.now();
+        if (url === lastExternalUrl && now - lastExternalOpenTs < 1000) {
+            return;
+        }
+        lastExternalUrl = url;
+        lastExternalOpenTs = now;
         // web:externalbrowser pins links to one browser instead of the OS default. The URL is
         // passed as its own argv entry, so nothing can quote-mangle it the way a shell would.
         if (browserPath && typeof browserPath === "string") {
