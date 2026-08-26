@@ -7,7 +7,7 @@ import { continuesUrl } from "./termlinks";
 describe("continuesUrl", () => {
     it("joins a URL the agent split mid-token", () => {
         // exactly what claude prints when a long console URL exceeds its own text width
-        const prev = "  할당량 페이지 (직행) https://console.cloud.google.com/apis/api/youtube.googleapis";
+        const prev = "  할당량 페이지 (직행) https://console.cloud.google.com/apis/api/youtube.googleapi";
         const next = "s.com/quotas?project=kkcms-499602";
         expect(continuesUrl(prev, next)).toBe(true);
     });
