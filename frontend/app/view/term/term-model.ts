@@ -34,6 +34,7 @@ import {
     WOS,
 } from "@/store/global";
 import * as services from "@/store/services";
+import { recordSentLine, suggestCompletion } from "@/app/view/term/quickreplies";
 import * as keyutil from "@/util/keyutil";
 import { isMacOS, isWindows } from "@/util/platformutil";
 import { boundNumber, fireAndForget, stringToBase64 } from "@/util/util";
@@ -511,7 +512,61 @@ export class TermViewModel implements ViewModel {
     // (especially visible with fast IME composition followed by ASCII input).
     inputQueue: Promise<void> = Promise.resolve();
 
+    // Everything the user types reaches the agent through here, so this is where the
+    // "lines you keep sending" learning listens (see quickreplies.ts).
+    private typedLine = "";
+
+    // what the → key would complete right now (null = nothing to offer)
+    typedSuggestionAtom: jotai.PrimitiveAtom<string | null> = jotai.atom(null) as jotai.PrimitiveAtom<string | null>;
+
+    private refreshSuggestion() {
+        const next = suggestCompletion(this.typedLine);
+        if (globalStore.get(this.typedSuggestionAtom) !== next) {
+            globalStore.set(this.typedSuggestionAtom, next);
+        }
+    }
+
+    // Accepts the pending suggestion by sending only the missing tail, so the agent's input
+    // box ends up with the full sentence. Returns false when there is nothing to complete.
+    // Quick reply buttons, in the order the bar shows them (configured first, learned after).
+    quickRepliesAtom: jotai.PrimitiveAtom<string[]> = jotai.atom([]) as jotai.PrimitiveAtom<string[]>;
+
+    sendQuickReply(index: number): boolean {
+        const replies = globalStore.get(this.quickRepliesAtom);
+        const text = replies?.[index];
+        if (!text) return false;
+        this.sendDataToController(text + "\r");
+        return true;
+    }
+
+    acceptSuggestion(): boolean {
+        const suggestion = globalStore.get(this.typedSuggestionAtom);
+        if (!suggestion) return false;
+        const typed = this.typedLine;
+        if (!suggestion.startsWith(typed) || suggestion === typed) return false;
+        this.sendDataToController(suggestion.slice(typed.length));
+        return true;
+    }
+
+    private trackTypedLine(data: string) {
+        for (const ch of data) {
+            if (ch === "\r" || ch === "\n") {
+                recordSentLine(this.typedLine);
+                this.typedLine = "";
+            } else if (ch === "\u007f" || ch === "\b") {
+                this.typedLine = this.typedLine.slice(0, -1);
+            } else if (ch >= " ") {
+                this.typedLine += ch;
+                if (this.typedLine.length > 200) this.typedLine = "";
+            } else {
+                this.typedLine = "";
+            }
+        }
+        this.refreshSuggestion();
+    }
+
     sendDataToController(data: string) {
+        this.trackTypedLine(data);
         const b64data = stringToBase64(data);
         this.inputQueue = this.inputQueue
             .then(() => RpcApi.ControllerInputCommand(TabRpcClient, { blockid: this.blockId, inputdata64: b64data }))
@@ -716,6 +771,26 @@ export class TermViewModel implements ViewModel {
             event.preventDefault();
             event.stopPropagation();
             return false;
+        }
+
+        // → completes the sentence you have typed before (see quickreplies.ts). Only fires
+        // when a suggestion is actually pending, so ordinary cursor movement is untouched.
+        if (keyutil.checkKeyPressed(waveEvent, "ArrowRight") && this.acceptSuggestion()) {
+            event.preventDefault();
+            event.stopPropagation();
+            return false;
+        }
+
+        // Alt+1..5 fire the quick reply buttons. Bare digits can't be taken — they are the
+        // most common thing you type at an agent.
+        for (let n = 1; n <= 5; n++) {
+            if (keyutil.checkKeyPressed(waveEvent, `Alt:${n}`)) {
+                if (this.sendQuickReply(n - 1)) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return false;
+                }
+            }
         }
 
         if (isMacOS()) {

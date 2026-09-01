@@ -6,6 +6,7 @@ import { SubBlock } from "@/app/block/block";
 import type { BlockNodeModel } from "@/app/block/blocktypes";
 import { NullErrorBoundary } from "@/app/element/errorboundary";
 import { parseResumeId } from "@/app/workspace/sidebaratoms";
+import { forgetLearnedReply, getLearnedReplies, learnedRepliesVersionAtom } from "@/app/view/term/quickreplies";
 import { Search, useSearch } from "@/app/element/search";
 import { ContextMenuModel } from "@/app/store/contextmenu";
 import { globalStore } from "@/app/store/jotaiStore";
@@ -184,28 +185,58 @@ const TermToolbarVDomNode = ({ blockId, model }: TerminalViewProps) => {
 // ("ㅇㅇ 진행해"), so put them a click away right under the terminal. Edit the list with the
 // term:quickreplies setting; an empty list hides the bar.
 const QuickReplyBar = React.memo(({ blockId, model }: { blockId: string; model: TermViewModel }) => {
-    const replies = jotai.useAtomValue(getSettingsKeyAtom("term:quickreplies"));
+    const configured = jotai.useAtomValue(getSettingsKeyAtom("term:quickreplies"));
+    const learnedVersion = jotai.useAtomValue(learnedRepliesVersionAtom);
+    const suggestion = jotai.useAtomValue(model.typedSuggestionAtom);
     const cmd = jotai.useAtomValue(getBlockMetaKeyAtom(blockId, "cmd")) as string | undefined;
-    if (!replies?.length || !parseResumeId(cmd)) {
+
+    // configured entries keep their order (and their Alt+n slots); learned ones fill the rest
+    const replies = React.useMemo(() => {
+        const fixed = configured ?? [];
+        const learned = getLearnedReplies().filter((r) => !fixed.includes(r));
+        return [...fixed, ...learned].slice(0, 10);
+    }, [configured, learnedVersion]);
+
+    React.useEffect(() => {
+        globalStore.set(model.quickRepliesAtom, replies);
+    }, [replies, model]);
+
+    if (!parseResumeId(cmd) || (replies.length === 0 && !suggestion)) {
         return null;
     }
+
     const send = (text: string) => {
         model.sendDataToController(text + "\r");
         model.giveFocus();
     };
+
     return (
-        <div className="flex flex-wrap gap-1 px-1.5 py-1 border-t border-border shrink-0">
-            {replies.map((reply) => (
-                <button
-                    key={reply}
-                    type="button"
-                    className="text-[11px] px-2 py-0.5 rounded-sm text-secondary hover:text-white hover:bg-hoverbg cursor-pointer border border-border"
-                    style={{ whiteSpace: "nowrap" }}
-                    onClick={() => send(reply)}
-                >
-                    {reply}
-                </button>
-            ))}
+        <div className="border-t border-border shrink-0">
+            {suggestion && (
+                <div className="flex items-center gap-1.5 px-2 py-0.5 text-[10px] text-muted border-b border-border/50">
+                    <i className="fa fa-solid fa-arrow-right text-[9px] text-accent" />
+                    <span className="truncate">{suggestion}</span>
+                </div>
+            )}
+            <div className="flex flex-wrap gap-1 px-1.5 py-1">
+                {replies.map((reply, i) => (
+                    <button
+                        key={reply}
+                        type="button"
+                        className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-sm text-secondary hover:text-white hover:bg-hoverbg cursor-pointer border border-border"
+                        style={{ whiteSpace: "nowrap" }}
+                        title={i < 5 ? `Alt+${i + 1}` : undefined}
+                        onClick={() => send(reply)}
+                        onContextMenu={(e) => {
+                            e.preventDefault();
+                            forgetLearnedReply(reply); // configured entries are unaffected
+                        }}
+                    >
+                        {i < 5 && <span className="text-muted">{i + 1}</span>}
+                        {reply}
+                    </button>
+                ))}
+            </div>
         </div>
     );
 });
