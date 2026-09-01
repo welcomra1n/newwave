@@ -5,6 +5,7 @@ import ClaudeColorSvg from "@/app/asset/claude-color.svg";
 import { SubBlock } from "@/app/block/block";
 import type { BlockNodeModel } from "@/app/block/blocktypes";
 import { NullErrorBoundary } from "@/app/element/errorboundary";
+import { parseResumeId } from "@/app/workspace/sidebaratoms";
 import { Search, useSearch } from "@/app/element/search";
 import { ContextMenuModel } from "@/app/store/contextmenu";
 import { globalStore } from "@/app/store/jotaiStore";
@@ -13,7 +14,7 @@ import { waveEventSubscribeSingle } from "@/app/store/wps";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import type { TermViewModel } from "@/app/view/term/term-model";
-import { atoms, getOverrideConfigAtom, getSettingsKeyAtom, getSettingsPrefixAtom, WOS } from "@/store/global";
+import { atoms, getBlockMetaKeyAtom, getOverrideConfigAtom, getSettingsKeyAtom, getSettingsPrefixAtom, WOS } from "@/store/global";
 import { fireAndForget, useAtomValueSafe } from "@/util/util";
 import { computeBgStyleFromMeta } from "@/util/waveutil";
 import { ISearchOptions } from "@xterm/addon-search";
@@ -177,6 +178,38 @@ const TermToolbarVDomNode = ({ blockId, model }: TerminalViewProps) => {
         />
     );
 };
+
+
+// One-click replies for agent sessions: the same short answers get typed over and over
+// ("ㅇㅇ 진행해"), so put them a click away right under the terminal. Edit the list with the
+// term:quickreplies setting; an empty list hides the bar.
+const QuickReplyBar = React.memo(({ blockId, model }: { blockId: string; model: TermViewModel }) => {
+    const replies = jotai.useAtomValue(getSettingsKeyAtom("term:quickreplies"));
+    const cmd = jotai.useAtomValue(getBlockMetaKeyAtom(blockId, "cmd")) as string | undefined;
+    if (!replies?.length || !parseResumeId(cmd)) {
+        return null;
+    }
+    const send = (text: string) => {
+        model.sendDataToController(text + "\r");
+        model.giveFocus();
+    };
+    return (
+        <div className="flex flex-wrap gap-1 px-1.5 py-1 border-t border-border shrink-0">
+            {replies.map((reply) => (
+                <button
+                    key={reply}
+                    type="button"
+                    className="text-[11px] px-2 py-0.5 rounded-sm text-secondary hover:text-white hover:bg-hoverbg cursor-pointer border border-border"
+                    style={{ whiteSpace: "nowrap" }}
+                    onClick={() => send(reply)}
+                >
+                    {reply}
+                </button>
+            ))}
+        </div>
+    );
+});
+QuickReplyBar.displayName = "QuickReplyBar";
 
 const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => {
     const viewRef = React.useRef<HTMLDivElement>(null);
@@ -413,6 +446,7 @@ const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => 
             <TermToolbarVDomNode key="vdom-toolbar" blockId={blockId} model={model} />
             <TermVDomNode key="vdom" blockId={blockId} model={model} />
             <div key="connect-elem" className="term-connectelem" ref={connectElemRef} />
+            <QuickReplyBar blockId={blockId} model={model} />
             <NullErrorBoundary debugName="TermLinkTooltip">
                 <TermLinkTooltip termWrap={termWrapInst} />
             </NullErrorBoundary>

@@ -113,6 +113,12 @@
         "term:theme": {
           "type": "string"
         },
+        "term:quickreplies": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "term:sessiondonenotify": {
           "type": "boolean"
         },

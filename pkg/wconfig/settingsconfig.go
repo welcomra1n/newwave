@@ -94,6 +94,8 @@ type SettingsType struct {
 	TermFontSize   float64 `json:"term:fontsize,omitempty"`
 	TermFontFamily string  `json:"term:fontfamily,omitempty"`
 	TermTheme      string  `json:"term:theme,omitempty"`
+	// One-click replies shown under an agent session terminal ("ㅇㅇ 진행해" and friends)
+	TermQuickReplies []string `json:"term:quickreplies,omitempty"`
 	// OS notification naming the session whose agent just finished a turn (default on)
 	TermSessionDoneNotify *bool `json:"term:sessiondonenotify,omitempty"`
 	// highlight for the user's own turns in an agent session (see usermsg-highlight.ts)
