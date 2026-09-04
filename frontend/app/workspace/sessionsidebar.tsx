@@ -158,14 +158,6 @@ function timeBucket(ms: number): string {
     return "이전";
 }
 
-// Compact cwd for the second line: keep the tail (project folder is the useful part).
-function shortCwd(cwd: string): string {
-    if (!cwd) return "";
-    const parts = cwd.replace(/\\/g, "/").split("/").filter(Boolean);
-    if (parts.length <= 2) return cwd.replace(/\\/g, "/");
-    return "…/" + parts.slice(-2).join("/");
-}
-
 // Find the open block (if any) that is running this session's resume command.
 function findOpenBlockId(sessionid: string): string | null {
     try {
@@ -588,7 +580,7 @@ const SessionItem = memo(
                     e.dataTransfer.effectAllowed = "move";
                 }}
                 className={clsx(
-                    "relative flex items-center gap-1.5 pl-2.5 pr-2 py-1.5 rounded-md cursor-pointer group overflow-hidden bg-white/[0.035] hover:bg-white/[0.08] transition-colors duration-150",
+                    "relative flex items-center gap-1.5 pl-2.5 pr-2 py-1 rounded-md cursor-pointer group overflow-hidden bg-white/[0.035] hover:bg-white/[0.08] transition-colors duration-150",
                     active ? "border border-white/15" : "border border-white/10 hover:border-white/20",
                     selected && "ring-2 ring-accent ring-inset",
                     highlighted && !selected && "ring-1 ring-accent/70 ring-inset bg-accent/10",
@@ -651,26 +643,14 @@ const SessionItem = memo(
                         >
                             {displayName}
                         </div>
-                        {searchSnippet ? (
+                        {/* one line per session: the second line only appears while searching,
+                            where the matched text is the reason the row is on screen at all.
+                            Last message and folder stay in the row tooltip. */}
+                        {searchSnippet && (
                             <div className="text-[10px] text-accent/80 truncate leading-tight" title={searchSnippet}>
                                 <i className="fa fa-solid fa-magnifying-glass text-[8px] mr-1 opacity-70" />
                                 {searchSnippet}
                             </div>
-                        ) : session.lastmsg ? (
-                            // where the session left off — beats repeating the folder, which the
-                            // group header and tooltip already carry
-                            <div className="text-[10px] text-muted truncate leading-tight">
-                                <span className="text-white/35 mr-1">
-                                    {session.lastrole === "user" ? "나" : "AI"}
-                                </span>
-                                {session.lastmsg}
-                            </div>
-                        ) : (
-                            session.cwd && (
-                                <div className="text-[10px] text-muted truncate leading-tight">
-                                    {shortCwd(session.cwd)}
-                                </div>
-                            )
                         )}
                     </div>
                 )}
@@ -1227,9 +1207,10 @@ const SessionSidebar = memo(() => {
         return items.map((s, i) => {
             // dashed divider where pinned sessions end and regular ones begin
             const showDivider = i > 0 && items[i - 1].pinned && !s.pinned;
-            // time-bucket header (only for non-pinned, when the bucket changes)
+            // time-bucket header (recency order only — under 이름순/상태순 the buckets would
+            // no longer describe the order and just add noise)
             let bucketLabel: string | null = null;
-            if (!s.pinned) {
+            if (!s.pinned && sort === "recent") {
                 const b = timeBucket(s.mtime);
                 if (b !== lastBucket) {
                     bucketLabel = b;
