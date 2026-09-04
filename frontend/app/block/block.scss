@@ -500,9 +500,12 @@
 }
 
 .block .block-awaiting-label .baw-sub {
-    color: rgba(255, 255, 255, 0.85);
-    font-size: 11px;
-    margin-top: 3px;
+    /* the elapsed clock is the point of this line — give it real size */
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 16px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+    margin-top: 4px;
 }
 
 .block .block-awaiting-label .baw-cwd {

@@ -552,7 +552,7 @@ export class TermWrap {
         const now = Date.now();
         if (now - this.lastDoneAnnounceTs < 10000) return;
         this.lastDoneAnnounceTs = now;
-        playDoneSound();
+        playDoneSound(sessionId);
         notifySessionDone(sessionId, this.blockId);
     }
 

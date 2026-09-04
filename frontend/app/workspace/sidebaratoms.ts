@@ -29,12 +29,17 @@ export const sessionPaletteOpenAtom = atom(false);
 
 // Session ids whose agent finished a turn and is waiting on the user.
 export const sessionAttentionAtom = atom<Set<string>>(new Set<string>());
+// when each waiting session finished, so a block can show how long it has been sitting there
+export const sessionDoneAtAtom = atom<Map<string, number>>(new Map<string, number>());
 export function markSessionAttention(sessionid: string) {
     const cur = globalStore.get(sessionAttentionAtom);
     if (!sessionid || cur.has(sessionid)) return;
     const next = new Set(cur);
     next.add(sessionid);
     globalStore.set(sessionAttentionAtom, next);
+    const times = new Map(globalStore.get(sessionDoneAtAtom));
+    times.set(sessionid, Date.now());
+    globalStore.set(sessionDoneAtAtom, times);
 }
 export function clearSessionAttention(sessionid: string) {
     const cur = globalStore.get(sessionAttentionAtom);
@@ -42,6 +47,8 @@ export function clearSessionAttention(sessionid: string) {
     const next = new Set(cur);
     next.delete(sessionid);
     globalStore.set(sessionAttentionAtom, next);
+    const times = new Map(globalStore.get(sessionDoneAtAtom));
+    if (times.delete(sessionid)) globalStore.set(sessionDoneAtAtom, times);
 }
 
 // Session ids whose agent is actively producing output (working right now).

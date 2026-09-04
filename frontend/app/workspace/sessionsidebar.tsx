@@ -65,7 +65,7 @@ export function bumpSessionList() {
 // One shared AudioContext, reused across calls (creating one per call leaks contexts
 // and browsers cap how many can exist).
 let sharedAudioCtx: AudioContext | null = null;
-export function playDoneSound() {
+export function playDoneSound(sessionId?: string) {
     try {
         const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
         if (!sharedAudioCtx) sharedAudioCtx = new Ctx();
@@ -84,8 +84,14 @@ export function playDoneSound() {
             o.start(ctx.currentTime + start);
             o.stop(ctx.currentTime + start + dur + 0.02);
         };
-        play(784, 0, 0.15); // G5
-        play(1047, 0.13, 0.22); // C6
+        // Each session gets its own note so four terminals don't all sound identical —
+        // pentatonic steps, which stay pleasant no matter which two land together.
+        const scale = [523.25, 587.33, 659.25, 783.99, 880.0]; // C5 D5 E5 G5 A5
+        let hash = 0;
+        for (const ch of sessionId ?? "") hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+        const root = scale[hash % scale.length];
+        play(root, 0, 0.15);
+        play(root * 1.5, 0.13, 0.22); // a fifth above
     } catch {
         // audio best-effort
     }

@@ -21,6 +21,7 @@ import {
     clearSessionAttention,
     parseResumeId,
     sessionAttentionAtom,
+    sessionDoneAtAtom,
     sessionInfoAtom,
 } from "@/app/workspace/sidebaratoms";
 import clsx from "clsx";
@@ -97,6 +98,13 @@ const BlockMask = React.memo(({ nodeModel }: { nodeModel: NodeModel }) => {
     );
 });
 
+// 0:07 / 1:23 / 12:05 — seconds first, because the first minute is when it matters most
+function formatWaiting(secs: number): string {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 const BlockFrame_Default_Component = (props: BlockFrameProps) => {
     const waveEnv = useWaveEnv<BlockEnv>();
     const { nodeModel, viewModel, blockModel, preview, numBlocksInTab, children } = props;
@@ -141,6 +149,25 @@ const BlockFrame_Default_Component = (props: BlockFrameProps) => {
         const sid = parseResumeId(blockCmd);
         return sid ? sessionInfo.get(sid) : undefined;
     }, [blockCmd, sessionInfo]);
+    // how long this block has been waiting — the number keeps ticking so a glance tells you
+    // which of several finished sessions has been ignored longest
+    const doneAtMap = jotai.useAtomValue(sessionDoneAtAtom);
+    const doneAt = React.useMemo(() => {
+        const sid = parseResumeId(blockCmd);
+        return sid ? doneAtMap.get(sid) : undefined;
+    }, [blockCmd, doneAtMap]);
+    const [waitingSecs, setWaitingSecs] = React.useState(0);
+    React.useEffect(() => {
+        if (!awaitingResponse || !doneAt) {
+            setWaitingSecs(0);
+            return;
+        }
+        const tick = () => setWaitingSecs(Math.max(0, Math.floor((Date.now() - doneAt) / 1000)));
+        tick();
+        const timer = setInterval(tick, 1000);
+        return () => clearInterval(timer);
+    }, [awaitingResponse, doneAt]);
+
     // focusing the block = acknowledged; drop the alert (glow + sidebar marker)
     React.useEffect(() => {
         if (!isFocused || !awaitingResponse) return;
@@ -236,7 +263,7 @@ const BlockFrame_Default_Component = (props: BlockFrameProps) => {
                 >
                     <div className="block-awaiting-label">
                         <div className="baw-title">{awaitingInfo?.alias || awaitingInfo?.title || "세션"}</div>
-                        <div className="baw-sub">응답 대기 중</div>
+                        <div className="baw-sub">응답 대기 {formatWaiting(waitingSecs)}</div>
                         {awaitingInfo?.cwd && <div className="baw-cwd">{awaitingInfo.cwd}</div>}
                     </div>
                 </div>
