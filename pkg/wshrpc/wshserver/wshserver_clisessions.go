@@ -805,6 +805,9 @@ type codexMetaLine struct {
 		SessionId string `json:"session_id"`
 		Id        string `json:"id"` // older codex format stores the id here
 		Cwd       string `json:"cwd"`
+		// codex writes a rollout for every sub-agent it spawns, not just for the session
+		// the user is talking to — those are "subagent" and have no place in this list
+		ThreadSource string `json:"thread_source"`
 	} `json:"payload"`
 }
 
@@ -847,6 +850,9 @@ func parseCodexSession(c cliSessionCandidate) (wshrpc.CliSessionEntry, bool) {
 		if entry.SessionId == "" {
 			var meta codexMetaLine
 			if json.Unmarshal(b, &meta) == nil && meta.Type == "session_meta" {
+				if meta.Payload.ThreadSource == "subagent" {
+					return entry, false // a sub-agent's transcript, not a session to resume
+				}
 				entry.SessionId = firstNonEmpty(meta.Payload.SessionId, meta.Payload.Id)
 				entry.Cwd = meta.Payload.Cwd
 				continue

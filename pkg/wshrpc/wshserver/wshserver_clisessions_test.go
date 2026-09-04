@@ -72,3 +72,39 @@ func TestSessionMetaKeepsDeletedFlag(t *testing.T) {
 		t.Fatal("deleted flag was pruned by a metadata update")
 	}
 }
+
+// codex records a rollout for every sub-agent it spawns; those must not show up as sessions
+func TestCodexSubagentRolloutsHidden(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	dir := filepath.Join(home, ".codex", "sessions", "2026", "09", "04")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write := func(name string, threadSource string) {
+		meta := `{"type":"session_meta","payload":{"session_id":"` + name +
+			`","cwd":"/tmp/proj","thread_source":"` + threadSource + `","originator":"codex-tui"}}` + "\n" +
+			`{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"본 세션 질문"}]}}` + "\n"
+		path := filepath.Join(dir, "rollout-2026-09-04T10-00-00-"+name+".jsonl")
+		if err := os.WriteFile(path, []byte(meta), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("11111111-1111-1111-1111-111111111111", "user")
+	write("22222222-2222-2222-2222-222222222222", "subagent")
+	write("33333333-3333-3333-3333-333333333333", "subagent")
+
+	ws := &WshServer{}
+	entries, err := ws.GetCliSessionsCommand(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected only the user session, got %d: %+v", len(entries), entries)
+	}
+	if entries[0].SessionId != "11111111-1111-1111-1111-111111111111" {
+		t.Fatalf("wrong session kept: %s", entries[0].SessionId)
+	}
+}
