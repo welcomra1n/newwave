@@ -1203,7 +1203,9 @@ const SessionSidebar = memo(() => {
     const selectedIds = Array.from(selected);
     // below this width the status label + age squeeze the title into nothing
     const compactRows = width < 250;
-    const renderItems = (items: CliSessionEntry[]) => {
+    // Folders group by purpose, so a time split inside one just chops it up. Only the
+    // ungrouped pile, which is ordered purely by recency, gets the 오늘/이번 주 headers.
+    const renderItems = (items: CliSessionEntry[], showBuckets = true) => {
         let lastBucket: string | null = null;
         return items.map((s, i) => {
             // dashed divider where pinned sessions end and regular ones begin
@@ -1211,7 +1213,7 @@ const SessionSidebar = memo(() => {
             // time-bucket header (recency order only — under 이름순/상태순 the buckets would
             // no longer describe the order and just add noise)
             let bucketLabel: string | null = null;
-            if (!s.pinned && sort === "recent") {
+            if (showBuckets && !s.pinned && sort === "recent") {
                 const b = timeBucket(s.mtime);
                 if (b !== lastBucket) {
                     bucketLabel = b;
@@ -1567,7 +1569,7 @@ const SessionSidebar = memo(() => {
                                     )}
                                     <span className="text-[10px] text-muted ml-auto shrink-0">{items.length}</span>
                                 </div>
-                                {!groupCollapsed && <div className="space-y-1 mt-0.5">{renderItems(items)}</div>}
+                                {!groupCollapsed && <div className="space-y-1 mt-0.5">{renderItems(items, isUng)}</div>}
                             </div>
                         );
                     })
