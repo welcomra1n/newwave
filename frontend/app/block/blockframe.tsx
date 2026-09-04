@@ -168,12 +168,16 @@ const BlockFrame_Default_Component = (props: BlockFrameProps) => {
         return () => clearInterval(timer);
     }, [awaitingResponse, doneAt]);
 
-    // focusing the block = acknowledged; drop the alert (glow + sidebar marker)
-    React.useEffect(() => {
-        if (!isFocused || !awaitingResponse) return;
-        const sid = parseResumeId(blockCmd);
-        if (sid) clearSessionAttention(sid);
-    }, [isFocused, awaitingResponse, blockCmd]);
+    // The session list is the only place aliases/titles live, and a block opened before that
+    // list loaded has none — fall back to the block's own header text, then its folder.
+    const blockHeaderText = jotai.useAtomValue(waveEnv.getBlockMetaKeyAtom(nodeModel.blockId, "frame:text")) as string;
+    const awaitingName = React.useMemo(() => {
+        const folder = awaitingInfo?.cwd?.replace(/[\/]+$/, "").split(/[\/]/).pop();
+        return awaitingInfo?.alias || blockHeaderText || awaitingInfo?.title || folder || "세션";
+    }, [awaitingInfo, blockHeaderText]);
+
+    // Acknowledging is typing, not looking: the alert used to clear on focus, and focus
+    // follows the mouse, so a pointer crossing the block wiped the alert unread.
 
     React.useEffect(() => {
         if (!manageConnection) {
@@ -262,7 +266,7 @@ const BlockFrame_Default_Component = (props: BlockFrameProps) => {
                     style={{ "--awaiting-color": sessionColor || "#33ff33" } as React.CSSProperties}
                 >
                     <div className="block-awaiting-label">
-                        <div className="baw-title">{awaitingInfo?.alias || awaitingInfo?.title || "세션"}</div>
+                        <div className="baw-title">{awaitingName}</div>
                         <div className="baw-sub">응답 대기 {formatWaiting(waitingSecs)}</div>
                         {awaitingInfo?.cwd && <div className="baw-cwd">{awaitingInfo.cwd}</div>}
                     </div>

@@ -35,6 +35,7 @@ import {
 } from "@/store/global";
 import * as services from "@/store/services";
 import { recordSentLine, suggestCompletion } from "@/app/view/term/quickreplies";
+import { clearSessionAttention, parseResumeId } from "@/app/workspace/sidebaratoms";
 import * as keyutil from "@/util/keyutil";
 import { isMacOS, isWindows } from "@/util/platformutil";
 import { boundNumber, fireAndForget, stringToBase64 } from "@/util/util";
@@ -567,6 +568,10 @@ export class TermViewModel implements ViewModel {
 
     sendDataToController(data: string) {
         this.trackTypedLine(data);
+        // typing into the session is the acknowledgement — not hovering over it
+        const cmd = globalStore.get(getBlockMetaKeyAtom(this.blockId, "cmd")) as string | undefined;
+        const sid = parseResumeId(cmd);
+        if (sid) clearSessionAttention(sid);
         const b64data = stringToBase64(data);
         this.inputQueue = this.inputQueue
             .then(() => RpcApi.ControllerInputCommand(TabRpcClient, { blockid: this.blockId, inputdata64: b64data }))
