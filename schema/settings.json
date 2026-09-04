@@ -119,6 +119,9 @@
           },
           "type": "array"
         },
+        "term:sessiondonespeak": {
+          "type": "boolean"
+        },
         "term:sessiondonenotify": {
           "type": "boolean"
         },

@@ -97,6 +97,28 @@ export function playDoneSound(sessionId?: string) {
     }
 }
 
+// Says the session name out loud. With more than a handful of sessions a tone can't tell you
+// which one finished; a two-word announcement can, and it needs no window focus.
+export function speakSessionDone(name: string) {
+    try {
+        const synth = window.speechSynthesis;
+        if (!synth) return false;
+        const text = `${name.slice(0, 20)} 완료`;
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.lang = "ko-KR";
+        utter.rate = 1.15;
+        utter.volume = 0.9;
+        const voice = synth.getVoices().find((v) => v.lang?.toLowerCase().startsWith("ko"));
+        if (voice) utter.voice = voice;
+        // a backlog of announcements is worse than none — keep only the newest
+        if (synth.speaking || synth.pending) synth.cancel();
+        synth.speak(utter);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 type AgentFilter = "all" | "claude" | "codex";
 
 const SORT_LABELS: Record<SessionSort, string> = {

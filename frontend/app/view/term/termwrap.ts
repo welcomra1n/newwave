@@ -24,6 +24,7 @@ import {
     markSessionAttention,
     markSessionWorking,
     playDoneSound,
+    speakSessionDone,
 } from "@/app/workspace/sessionsidebar";
 import * as services from "@/store/services";
 import { PLATFORM, PlatformMacOS } from "@/util/platformutil";
@@ -552,7 +553,14 @@ export class TermWrap {
         const now = Date.now();
         if (now - this.lastDoneAnnounceTs < 10000) return;
         this.lastDoneAnnounceTs = now;
-        playDoneSound(sessionId);
+        const info = globalStore.get(sessionInfoAtom).get(sessionId);
+        const blockTitle = globalStore.get(getBlockMetaKeyAtom(this.blockId, "frame:text")) as string | undefined;
+        const name = info?.alias || blockTitle || info?.title || "세션";
+        // speaking the name beats a tone once more than a few sessions are open
+        const speak = globalStore.get(getSettingsKeyAtom("term:sessiondonespeak")) ?? false;
+        if (!speak || !speakSessionDone(name)) {
+            playDoneSound(sessionId);
+        }
         notifySessionDone(sessionId, this.blockId);
     }
 
