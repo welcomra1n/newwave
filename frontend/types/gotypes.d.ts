@@ -1458,7 +1458,6 @@ declare global {
         "term:fontfamily"?: string;
         "term:theme"?: string;
         "term:quickreplies"?: string[];
-        "term:sessiondonespeak"?: boolean;
         "term:sessiondonenotify"?: boolean;
         "term:usermsghighlight"?: boolean;
         "term:usermsgbg"?: string;

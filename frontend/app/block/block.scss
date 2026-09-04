@@ -455,16 +455,6 @@
 /* A CLI session block whose agent finished its turn and is waiting on the user.
    Whole-block wash + the session's name. Tint follows the session's custom color
    (--awaiting-color, set inline from the block's frame:text:bg), default green. */
-@keyframes block-awaiting-overlay {
-    0%,
-    100% {
-        background-color: color-mix(in srgb, var(--awaiting-color, #33ff33) 7%, transparent);
-    }
-    50% {
-        background-color: color-mix(in srgb, var(--awaiting-color, #33ff33) 26%, transparent);
-    }
-}
-
 .block .block-awaiting-overlay {
     position: absolute;
     inset: 0;
@@ -474,7 +464,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    animation: block-awaiting-overlay 1.1s ease-in-out infinite;
+    /* steady wash, no pulse — the running clock is the thing that moves */
+    background-color: color-mix(in srgb, var(--awaiting-color, #33ff33) 60%, transparent);
     box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--awaiting-color, #33ff33) 75%, transparent);
 }
 

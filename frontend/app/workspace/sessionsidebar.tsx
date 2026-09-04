@@ -65,7 +65,7 @@ export function bumpSessionList() {
 // One shared AudioContext, reused across calls (creating one per call leaks contexts
 // and browsers cap how many can exist).
 let sharedAudioCtx: AudioContext | null = null;
-export function playDoneSound(sessionId?: string) {
+export function playDoneSound() {
     try {
         const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
         if (!sharedAudioCtx) sharedAudioCtx = new Ctx();
@@ -84,38 +84,11 @@ export function playDoneSound(sessionId?: string) {
             o.start(ctx.currentTime + start);
             o.stop(ctx.currentTime + start + dur + 0.02);
         };
-        // Each session gets its own note so four terminals don't all sound identical —
-        // pentatonic steps, which stay pleasant no matter which two land together.
-        const scale = [523.25, 587.33, 659.25, 783.99, 880.0]; // C5 D5 E5 G5 A5
-        let hash = 0;
-        for (const ch of sessionId ?? "") hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
-        const root = scale[hash % scale.length];
-        play(root, 0, 0.15);
-        play(root * 1.5, 0.13, 0.22); // a fifth above
+        // plain double beep — the block overlay says which session it was
+        play(988, 0, 0.09);
+        play(988, 0.13, 0.11);
     } catch {
         // audio best-effort
-    }
-}
-
-// Says the session name out loud. With more than a handful of sessions a tone can't tell you
-// which one finished; a two-word announcement can, and it needs no window focus.
-export function speakSessionDone(name: string) {
-    try {
-        const synth = window.speechSynthesis;
-        if (!synth) return false;
-        const text = `${name.slice(0, 20)} 완료`;
-        const utter = new SpeechSynthesisUtterance(text);
-        utter.lang = "ko-KR";
-        utter.rate = 1.15;
-        utter.volume = 0.9;
-        const voice = synth.getVoices().find((v) => v.lang?.toLowerCase().startsWith("ko"));
-        if (voice) utter.voice = voice;
-        // a backlog of announcements is worse than none — keep only the newest
-        if (synth.speaking || synth.pending) synth.cancel();
-        synth.speak(utter);
-        return true;
-    } catch {
-        return false;
     }
 }
 

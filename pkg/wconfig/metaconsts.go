@@ -45,7 +45,6 @@ const (
 	ConfigKey_TermTheme                  = "term:theme"
 	ConfigKey_TermQuickReplies           = "term:quickreplies"
 	ConfigKey_TermSessionDoneNotify      = "term:sessiondonenotify"
-	ConfigKey_TermSessionDoneSpeak       = "term:sessiondonespeak"
 	ConfigKey_TermUserMsgHighlight       = "term:usermsghighlight"
 	ConfigKey_TermUserMsgBg              = "term:usermsgbg"
 	ConfigKey_TermUserMsgColor           = "term:usermsgcolor"

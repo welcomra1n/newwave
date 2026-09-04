@@ -96,9 +96,6 @@ type SettingsType struct {
 	TermTheme      string  `json:"term:theme,omitempty"`
 	// One-click replies shown under an agent session terminal ("ㅇㅇ 진행해" and friends)
 	TermQuickReplies []string `json:"term:quickreplies,omitempty"`
-	// Speak the finished session's name out loud instead of a chime — with many sessions open
-	// a tone can't identify which one finished, a name can
-	TermSessionDoneSpeak *bool `json:"term:sessiondonespeak,omitempty"`
 	// OS notification naming the session whose agent just finished a turn (default on)
 	TermSessionDoneNotify *bool `json:"term:sessiondonenotify,omitempty"`
 	// highlight for the user's own turns in an agent session (see usermsg-highlight.ts)

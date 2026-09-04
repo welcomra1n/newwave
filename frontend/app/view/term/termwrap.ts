@@ -24,7 +24,6 @@ import {
     markSessionAttention,
     markSessionWorking,
     playDoneSound,
-    speakSessionDone,
 } from "@/app/workspace/sessionsidebar";
 import * as services from "@/store/services";
 import { PLATFORM, PlatformMacOS } from "@/util/platformutil";
@@ -176,6 +175,7 @@ export class TermWrap {
                 const cmd = globalStore.get(getBlockMetaKeyAtom(this.blockId, "cmd")) as string | undefined;
                 const sessionId = parseResumeId(cmd);
                 if (!sessionId) return;
+                this.sawBell = true;
                 markSessionAttention(sessionId);
                 this.announceTurnDone(sessionId);
             } catch {
@@ -539,6 +539,8 @@ export class TermWrap {
     private wasActive = false;
     private cachedResumeId: string | null | undefined = undefined;
     private lastDoneAnnounceTs = 0;
+    // whether this terminal's agent rings the bell when it finishes (then we trust only that)
+    private sawBell = false;
 
     private getResumeSessionId(): string | null {
         if (this.cachedResumeId !== undefined) return this.cachedResumeId;
@@ -553,14 +555,7 @@ export class TermWrap {
         const now = Date.now();
         if (now - this.lastDoneAnnounceTs < 10000) return;
         this.lastDoneAnnounceTs = now;
-        const info = globalStore.get(sessionInfoAtom).get(sessionId);
-        const blockTitle = globalStore.get(getBlockMetaKeyAtom(this.blockId, "frame:text")) as string | undefined;
-        const name = info?.alias || blockTitle || info?.title || "세션";
-        // speaking the name beats a tone once more than a few sessions are open
-        const speak = globalStore.get(getSettingsKeyAtom("term:sessiondonespeak")) ?? false;
-        if (!speak || !speakSessionDone(name)) {
-            playDoneSound(sessionId);
-        }
+        playDoneSound();
         notifySessionDone(sessionId, this.blockId);
     }
 
@@ -573,15 +568,19 @@ export class TermWrap {
         this.wasActive = true;
         if (this.workingTimer) clearTimeout(this.workingTimer);
         this.workingTimer = setTimeout(() => clearSessionWorking(sid), 1000);
-        // output stayed quiet for a while after activity => turn finished
+        // Fallback only. The agent rings the bell when it actually wants input; a quiet
+        // terminal means nothing on its own (a long tool call looks exactly the same), and
+        // announcing "done" mid-work is worse than announcing nothing. So once this terminal
+        // has ever rung, the timer stops guessing — and until then it waits far longer.
         if (this.doneTimer) clearTimeout(this.doneTimer);
+        if (this.sawBell) return;
         this.doneTimer = setTimeout(() => {
-            if (this.wasActive) {
+            if (this.wasActive && !this.sawBell) {
                 this.wasActive = false;
                 markSessionAttention(sid);
                 this.announceTurnDone(sid);
             }
-        }, 3000);
+        }, 45000);
     }
 
     handleNewFileSubjectData(msg: WSFileEventData) {
