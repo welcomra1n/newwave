@@ -83,6 +83,13 @@ func (ws *WshServer) GetCliSessionsCommand(ctx context.Context) ([]wshrpc.CliSes
 		if !ok {
 			continue
 		}
+		// a session made entirely of harness boilerplate has no title of its own — the folder
+		// it ran in is the most useful thing left to call it
+		if entry.Title == "(제목 없음)" && entry.Cwd != "" {
+			if base := filepath.Base(strings.TrimRight(entry.Cwd, `/\`)); base != "" && base != "." {
+				entry.Title = base
+			}
+		}
 		if m, found := meta[entry.SessionId]; found {
 			if m.Deleted {
 				continue // user deleted it; a running agent may have recreated the file
@@ -784,7 +791,7 @@ func parseClaudeSession(c cliSessionCandidate) (wshrpc.CliSessionEntry, bool) {
 			break
 		}
 	}
-	entry.Title = firstNonEmpty(bestTitle, fallbackTitle, "(제목 없음)")
+	entry.Title = usableTitle(bestTitle, fallbackTitle)
 	return entry, true
 }
 
@@ -876,7 +883,7 @@ func parseCodexSession(c cliSessionCandidate) (wshrpc.CliSessionEntry, bool) {
 		// still no id -> not resumable, drop
 		return entry, false
 	}
-	entry.Title = firstNonEmpty(bestTitle, fallbackTitle, "(제목 없음)")
+	entry.Title = usableTitle(bestTitle, fallbackTitle)
 	return entry, true
 }
 
@@ -915,14 +922,20 @@ func isNoiseTitle(s string) bool {
 		return true
 	}
 	noisePrefixes := []string{
-		"<system-reminder", "<command-", "<local-command", "[Image",
-		"# AGENTS.md", "Caveat:", "This session is being continued",
-		"<user-prompt-submit-hook", "<persisted-", "<budget", "```",
+		"[Image", "# AGENTS.md", "Caveat:", "This session is being continued",
+		"# Files mentioned by the user", "# Chrome tabs", "## Referenced ChatGPT conversation",
+		"## Referenced", "```",
 	}
 	for _, p := range noisePrefixes {
 		if strings.HasPrefix(t, p) {
 			return true
 		}
+	}
+	// Any <tag …> block the harness injected (system-reminder, recommended_plugins,
+	// user-prompt-submit-hook, …). Listing them one by one kept missing new ones, and a real
+	// prompt almost never opens with a tag.
+	if strings.HasPrefix(t, "<") && len(t) > 1 && (isTagChar(rune(t[1]))) {
+		return true
 	}
 	// bare slash command, e.g. "/resume", "/clear"
 	if strings.HasPrefix(t, "/") && !strings.ContainsAny(t, " \t") && len(t) < 24 {
@@ -939,6 +952,23 @@ func isNoiseTitle(s string) bool {
 		}
 	}
 	return false
+}
+
+// isTagChar reports whether c could start an xml-ish tag name.
+func isTagChar(c rune) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || c == '/'
+}
+
+// usableTitle picks the best non-noise text available; boilerplate-only sessions end up
+// unnamed instead of showing "<recommended_plugins> …" as their name.
+func usableTitle(best, fallback string) string {
+	if best != "" {
+		return best
+	}
+	if fallback != "" && !isNoiseTitle(fallback) {
+		return fallback
+	}
+	return "(제목 없음)"
 }
 
 // pickTitle updates best/fallback trackers with a new candidate. Returns true

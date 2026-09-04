@@ -15,7 +15,7 @@ import { getLayoutModelForStaticTab } from "@/layout/index";
 import { atoms, createBlock, getBlockMetaKeyAtom, refocusNode, WOS } from "@/store/global";
 import { fireAndForget } from "@/util/util";
 import clsx from "clsx";
-import { atom, useAtom, useAtomValue, useSetAtom } from "jotai";
+import { atom, useAtom, useAtomValue, useSetAtom, type PrimitiveAtom } from "jotai";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { openColorPicker } from "./colorpicker";
 import { ConnManagerModal, connManagerOpenAtom } from "./connmanager";
@@ -91,6 +91,58 @@ export function playDoneSound() {
         // audio best-effort
     }
 }
+
+// Hover preview: the row is one line, so the details (where it ran, what was last said, which
+// model) live in a card that follows the pointer instead of a native tooltip.
+type PreviewState = { session: CliSessionEntry; top: number; left: number } | null;
+const sessionPreviewAtom = atom(null) as PrimitiveAtom<PreviewState>;
+
+let previewTimer: ReturnType<typeof setTimeout> | null = null;
+
+function showPreview(session: CliSessionEntry, el: HTMLElement) {
+    if (previewTimer) clearTimeout(previewTimer);
+    const rect = el.getBoundingClientRect();
+    previewTimer = setTimeout(() => {
+        globalStore.set(sessionPreviewAtom, {
+            session,
+            top: Math.min(rect.top, window.innerHeight - 180),
+            left: rect.right + 8,
+        });
+    }, 350); // long enough that scanning the list doesn't flash cards
+}
+
+function hidePreview() {
+    if (previewTimer) clearTimeout(previewTimer);
+    globalStore.set(sessionPreviewAtom, null);
+}
+
+const SessionPreviewCard = memo(() => {
+    const preview = useAtomValue(sessionPreviewAtom);
+    if (!preview) return null;
+    const { session, top, left } = preview;
+    return (
+        <div
+            className="fixed z-[1200] w-[320px] max-w-[45vw] rounded-md border border-border bg-modalbg shadow-2xl px-3 py-2 pointer-events-none"
+            style={{ top, left }}
+        >
+            <div className="text-xs text-white font-medium break-words line-clamp-2">
+                {session.alias || session.title}
+            </div>
+            {session.lastmsg && (
+                <div className="mt-1.5 text-[11px] text-secondary break-words line-clamp-4">
+                    <span className="text-white/40 mr-1">{session.lastrole === "user" ? "나" : "AI"}</span>
+                    {session.lastmsg}
+                </div>
+            )}
+            <div className="mt-1.5 flex items-center gap-2 text-[10px] text-muted">
+                <span className="truncate">{session.cwd}</span>
+                {session.model && <span className="shrink-0">{session.model}</span>}
+                <span className="shrink-0 ml-auto">{relTime(session.mtime)}</span>
+            </div>
+        </div>
+    );
+});
+SessionPreviewCard.displayName = "SessionPreviewCard";
 
 type AgentFilter = "all" | "claude" | "codex";
 
@@ -602,15 +654,8 @@ const SessionItem = memo(
                     openSession(session);
                 }}
                 onContextMenu={onContextMenu}
-                title={[
-                    session.cwd,
-                    session.model ? `모델: ${session.model}` : "",
-                    session.lastmsg ? `${session.lastrole === "user" ? "나" : "AI"}: ${session.lastmsg}` : "",
-                    session.sessionid,
-                    active ? "(열림)" : "",
-                ]
-                    .filter(Boolean)
-                    .join("\n")}
+                onMouseEnter={(e) => showPreview(session, e.currentTarget)}
+                onMouseLeave={hidePreview}
             >
                 {/* left bar = session identity color (only when the user assigned one) */}
                 {session.color && (
@@ -1588,6 +1633,7 @@ const SessionSidebar = memo(() => {
             onMouseLeave={() => setHovering(false)}
         >
             <ConnManagerModal />
+            <SessionPreviewCard />
             {!collapsed ? (
                 <div className="relative h-full border-r border-border" style={{ width }}>
                     {panel}
