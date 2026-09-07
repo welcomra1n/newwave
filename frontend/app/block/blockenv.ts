@@ -41,6 +41,10 @@ export type BlockEnv = WaveEnvSubset<{
         | "frame:text"
         | "frame:activebordercolor"
         | "frame:bordercolor"
+        // session blocks: the resume command identifies the session, frame:text:bg carries
+        // its color into the header and the awaiting overlay
+        | "cmd"
+        | "frame:text:bg"
         | "view"
         | "connection"
         | "icon:color"

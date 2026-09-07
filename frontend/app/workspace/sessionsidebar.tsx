@@ -164,6 +164,62 @@ function sessionLabel(s: CliSessionEntry): string {
     return s.alias || s.title || "";
 }
 
+// The list the sidebar shows, as a pure function of its inputs. Kept out of the component so
+// the filter/sort rules can be tested directly — they are where the subtle bugs live (pins
+// escaping a status filter, buckets surviving a name sort, and so on).
+export type SidebarSelectInput = {
+    sessions: CliSessionEntry[];
+    agentFilter: AgentFilter;
+    statusFilter: SessionStatusFilter;
+    sort: SessionSort;
+    query: string;
+    attention: Set<string>;
+    working: Set<string>;
+    open: Set<string>;
+    live: Set<string>;
+    contentMatches?: Map<string, string> | null;
+};
+
+export function selectSidebarSessions(input: SidebarSelectInput): CliSessionEntry[] {
+    const { sessions, agentFilter, statusFilter, sort, attention, working, open, live, contentMatches } = input;
+    const q = input.query.trim().toLowerCase();
+    // pinned sessions are exempt from the status filter so a pinned one never vanishes
+    const statusMatch = (s: CliSessionEntry) => {
+        switch (statusFilter) {
+            case "waiting":
+                return attention.has(s.sessionid);
+            case "working":
+                return working.has(s.sessionid);
+            case "open":
+                return open.has(s.sessionid);
+            case "live":
+                return live.has(s.sessionid);
+            default:
+                return true;
+        }
+    };
+    const shown = sessions.filter((s) => {
+        if (agentFilter !== "all" && s.agent !== agentFilter) return false;
+        if (statusFilter !== "all" && !s.pinned && !statusMatch(s)) return false;
+        if (!q) return true;
+        // instant title/alias/cwd match, plus the backend content match (fills in after debounce)
+        const hay = `${s.alias ?? ""} ${s.title ?? ""} ${s.cwd ?? ""}`.toLowerCase();
+        return hay.includes(q) || (contentMatches?.has(s.sessionid) ?? false);
+    });
+    if (sort !== "recent") {
+        // the backend already returns pinned-first/recency; re-sort within that pinned split
+        const rank = (s: CliSessionEntry) =>
+            attention.has(s.sessionid) ? 0 : working.has(s.sessionid) ? 1 : open.has(s.sessionid) ? 2 : 3;
+        shown.sort((a, b) => {
+            if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+            if (sort === "name") return sessionLabel(a).localeCompare(sessionLabel(b), "ko");
+            const r = rank(a) - rank(b);
+            return r !== 0 ? r : b.mtime - a.mtime;
+        });
+    }
+    return shown;
+}
+
 // Session ids currently open as blocks in the active tab (reactive).
 const activeSessionIdsAtom = atom((get): Set<string> => {
     const ids = new Set<string>();
@@ -1196,40 +1252,18 @@ const SessionSidebar = memo(() => {
     );
 
     const q = query.trim().toLowerCase();
-    // status filter: pinned sessions are exempt so a pinned one never vanishes from the top
-    const statusMatch = (s: CliSessionEntry) => {
-        switch (statusFilter) {
-            case "waiting":
-                return attention.has(s.sessionid);
-            case "working":
-                return working.has(s.sessionid);
-            case "open":
-                return activeIds.has(s.sessionid);
-            case "live":
-                return liveIds.has(s.sessionid);
-            default:
-                return true;
-        }
-    };
-    const shown = sessions.filter((s) => {
-        if (filter !== "all" && s.agent !== filter) return false;
-        if (statusFilter !== "all" && !s.pinned && !statusMatch(s)) return false;
-        if (!q) return true;
-        // instant title/alias/cwd match, plus backend content match (fills in after debounce)
-        const hay = `${s.alias ?? ""} ${s.title ?? ""} ${s.cwd ?? ""}`.toLowerCase();
-        return hay.includes(q) || (contentMatches?.has(s.sessionid) ?? false);
+    const shown = selectSidebarSessions({
+        sessions,
+        agentFilter: filter,
+        statusFilter,
+        sort,
+        query,
+        attention,
+        working,
+        open: activeIds,
+        live: liveIds,
+        contentMatches,
     });
-    if (sort !== "recent") {
-        // backend already returns pinned-first/recency; re-sort within that pinned split
-        const rank = (s: CliSessionEntry) =>
-            attention.has(s.sessionid) ? 0 : working.has(s.sessionid) ? 1 : activeIds.has(s.sessionid) ? 2 : 3;
-        shown.sort((a, b) => {
-            if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-            if (sort === "name") return sessionLabel(a).localeCompare(sessionLabel(b), "ko");
-            const r = rank(a) - rank(b);
-            return r !== 0 ? r : b.mtime - a.mtime;
-        });
-    }
     const counts: Record<AgentFilter, number> = {
         all: sessions.length,
         claude: sessions.filter((s) => s.agent === "claude").length,

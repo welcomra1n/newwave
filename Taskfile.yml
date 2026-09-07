@@ -121,6 +121,19 @@ tasks:
         deps:
             - docs:npm:install
 
+    verify:
+        desc: Pre-push gate — typecheck, tests, and a real bundle build.
+        summary: |
+            What CI would reject, caught locally. The bundle build is the part that matters:
+            a deleted file whose import survives passes the typecheck and only fails when
+            rollup resolves modules (that is how v0.14.53 shipped broken).
+        cmds:
+            - npx tsc --noEmit -p tsconfig.json
+            - go build ./pkg/... ./cmd/...
+            - go test ./pkg/wshrpc/wshserver/
+            - npx vitest run
+            - npx electron-vite build
+
     package:
         desc: Package the application for the current platform.
         cmds:

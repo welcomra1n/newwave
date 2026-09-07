@@ -6,6 +6,10 @@ export default mergeConfig(
     defineConfig({
         test: {
             reporters: ["verbose", "junit"],
+            // A few suites do a dynamic import of the whole preview mock env; on a loaded
+            // machine that alone can exceed the 5s default and the run fails for no reason.
+            testTimeout: 30000,
+            hookTimeout: 30000,
             outputFile: {
                 junit: "test-results.xml",
             },

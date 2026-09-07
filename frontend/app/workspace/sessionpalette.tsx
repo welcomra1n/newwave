@@ -26,6 +26,32 @@ function shortCwd(cwd: string): string {
     return parts.length <= 2 ? cwd.replace(/\\/g, "/") : "…/" + parts.slice(-2).join("/");
 }
 
+// What the palette lists, as a pure function. Same reason as the sidebar selector: the rules
+// (waiting first, typing widens the scope, cap the list) are worth testing on their own.
+export function selectPaletteSessions(
+    sessions: CliSessionEntry[],
+    attention: Set<string>,
+    scope: Scope,
+    query: string,
+    limit = 50
+): CliSessionEntry[] {
+    const q = query.trim().toLowerCase();
+    // typing always searches everything — a waiting-only list you can't escape is a trap
+    const wantAll = scope === "all" || q.length > 0;
+    return sessions
+        .filter((s) => {
+            if (!wantAll && !attention.has(s.sessionid)) return false;
+            if (!q) return true;
+            return `${s.alias ?? ""} ${s.title ?? ""} ${s.cwd ?? ""}`.toLowerCase().includes(q);
+        })
+        .sort((a, b) => {
+            const aw = attention.has(a.sessionid) ? 0 : 1;
+            const bw = attention.has(b.sessionid) ? 0 : 1;
+            return aw !== bw ? aw - bw : b.mtime - a.mtime;
+        })
+        .slice(0, limit);
+}
+
 export const SessionPalette = memo(() => {
     const [open, setOpen] = useAtom(sessionPaletteOpenAtom);
     const attention = useAtomValue(sessionAttentionAtom);
@@ -54,23 +80,10 @@ export const SessionPalette = memo(() => {
     }, [open]);
 
     const q = query.trim().toLowerCase();
-    const shown = useMemo(() => {
-        // typing always searches everything — a waiting-only list you can't escape is a trap
-        const wantAll = scope === "all" || q.length > 0;
-        const list = sessions.filter((s) => {
-            if (!wantAll && !attention.has(s.sessionid)) return false;
-            if (!q) return true;
-            return `${s.alias ?? ""} ${s.title ?? ""} ${s.cwd ?? ""}`.toLowerCase().includes(q);
-        });
-        // waiting first, then most recent
-        return list
-            .sort((a, b) => {
-                const aw = attention.has(a.sessionid) ? 0 : 1;
-                const bw = attention.has(b.sessionid) ? 0 : 1;
-                return aw !== bw ? aw - bw : b.mtime - a.mtime;
-            })
-            .slice(0, 50);
-    }, [sessions, attention, q, scope]);
+    const shown = useMemo(
+        () => selectPaletteSessions(sessions, attention, scope, query),
+        [sessions, attention, q, scope]
+    );
 
     const waitingCount = useMemo(
         () => sessions.filter((s) => attention.has(s.sessionid)).length,

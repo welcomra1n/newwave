@@ -37,7 +37,8 @@ import { BlockEnv } from "./blockenv";
 import { BlockFrameProps } from "./blocktypes";
 
 // Which block's header title is currently being renamed inline (null = none).
-const renamingBlockAtom = jotai.atom<string | null>(null);
+// which block header is being renamed inline (null = none)
+const renamingBlockAtom = jotai.atom(null) as jotai.PrimitiveAtom<string | null>;
 
 function setBlockMeta(blockId: string, meta: MetaType) {
     RpcApi.SetMetaCommand(TabRpcClient, { oref: WOS.makeORef("block", blockId), meta });
