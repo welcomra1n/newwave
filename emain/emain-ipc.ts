@@ -250,12 +250,16 @@ export function initIpcHandlers() {
         lastExternalOpenTs = now;
         // web:externalbrowser pins links to one browser instead of the OS default. The URL is
         // passed as its own argv entry, so nothing can quote-mangle it the way a shell would.
+        // Logged on every path: when two browsers appear for one click, this line is what
+        // says whether this app opened them.
+        console.log(`open-external url=${url} configured=${browserPath ?? "(default)"}`);
         if (browserPath && typeof browserPath === "string") {
             const exe = resolveBrowserPath(browserPath);
             if (exe != null) {
                 try {
                     const child = child_process.spawn(exe, [url], { detached: true, stdio: "ignore" });
                     child.unref();
+                    console.log(`open-external spawned ${exe}`);
                     return;
                 } catch (err) {
                     console.error(`Failed to open URL in ${exe}, falling back to default browser:`, err);
@@ -264,6 +268,7 @@ export function initIpcHandlers() {
                 console.error(`Configured browser not found: ${browserPath}, using default browser`);
             }
         }
+        console.log("open-external falling back to the OS default browser");
         fireAndForget(() =>
             callWithOriginalXdgCurrentDesktopAsync(() =>
                 electron.shell.openExternal(url).catch((err) => {
