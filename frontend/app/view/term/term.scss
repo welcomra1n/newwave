@@ -149,9 +149,38 @@
         // the user's own turns ("> …"), tagged by usermsg-highlight.ts.
         // Blue band by default, deliberately off the green key color so it reads as
         // "mine" and not as agent output. Overridable via term:usermsgbg / term:usermsgcolor.
+        // The user's own turns, drawn as a bubble. Rows are fixed-height boxes here, so the
+        // "bubble" is made of background + rounded ends + a left bar; adding real padding or
+        // margins would shift every row and break the terminal's own coordinates.
         .xterm-rows > div.nw-usermsg {
             background-color: var(--nw-usermsg-bg, rgba(88, 140, 255, 0.16));
             box-shadow: inset 2px 0 0 var(--nw-usermsg-bar, rgba(130, 175, 255, 0.9));
+        }
+
+        .xterm-rows > div.nw-usermsg-start {
+            border-top-left-radius: 6px;
+            border-top-right-radius: 6px;
+            box-shadow:
+                inset 2px 0 0 var(--nw-usermsg-bar, rgba(130, 175, 255, 0.9)),
+                inset 0 1px 0 var(--nw-usermsg-bar, rgba(130, 175, 255, 0.45));
+        }
+
+        .xterm-rows > div.nw-usermsg-end {
+            border-bottom-left-radius: 6px;
+            border-bottom-right-radius: 6px;
+        }
+
+        // one message on a single row needs both ends and both edges
+        .xterm-rows > div.nw-usermsg-start.nw-usermsg-end {
+            box-shadow:
+                inset 2px 0 0 var(--nw-usermsg-bar, rgba(130, 175, 255, 0.9)),
+                inset 0 1px 0 var(--nw-usermsg-bar, rgba(130, 175, 255, 0.45)),
+                inset 0 -1px 0 var(--nw-usermsg-bar, rgba(130, 175, 255, 0.45));
+        }
+
+        // where the agent's answer begins: a hairline so turns stop running together
+        .xterm-rows > div.nw-turnstart {
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
         }
     }
 }
