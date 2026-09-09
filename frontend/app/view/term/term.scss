@@ -146,41 +146,72 @@
             background-color: transparent;
         }
 
-        // the user's own turns ("> …"), tagged by usermsg-highlight.ts.
-        // Blue band by default, deliberately off the green key color so it reads as
-        // "mine" and not as agent output. Overridable via term:usermsgbg / term:usermsgcolor.
-        // The user's own turns, drawn as a bubble. Rows are fixed-height boxes here, so the
-        // "bubble" is made of background + rounded ends + a left bar; adding real padding or
-        // margins would shift every row and break the terminal's own coordinates.
+        // Conversation boxes (usermsg-highlight.ts). Each speaker's block is filled and gets
+        // rounded ends; blank rows sit outside the boxes and read as the gap between turns.
+        // Borders would change row height and desync the terminal, so every edge is an
+        // inset shadow.
         .xterm-rows > div.nw-usermsg {
-            background-color: var(--nw-usermsg-bg, rgba(88, 140, 255, 0.16));
-            box-shadow: inset 2px 0 0 var(--nw-usermsg-bar, rgba(130, 175, 255, 0.9));
-        }
-
-        .xterm-rows > div.nw-usermsg-start {
-            border-top-left-radius: 6px;
-            border-top-right-radius: 6px;
+            background-color: var(--nw-usermsg-bg, rgba(51, 255, 51, 0.1));
             box-shadow:
-                inset 2px 0 0 var(--nw-usermsg-bar, rgba(130, 175, 255, 0.9)),
-                inset 0 1px 0 var(--nw-usermsg-bar, rgba(130, 175, 255, 0.45));
+                inset 1px 0 0 var(--nw-usermsg-edge, rgba(51, 255, 51, 0.35)),
+                inset -1px 0 0 var(--nw-usermsg-edge, rgba(51, 255, 51, 0.35));
         }
 
-        .xterm-rows > div.nw-usermsg-end {
-            border-bottom-left-radius: 6px;
-            border-bottom-right-radius: 6px;
-        }
-
-        // one message on a single row needs both ends and both edges
-        .xterm-rows > div.nw-usermsg-start.nw-usermsg-end {
+        .xterm-rows > div.nw-agentmsg {
+            background-color: var(--nw-agentmsg-bg, rgba(255, 255, 255, 0.035));
             box-shadow:
-                inset 2px 0 0 var(--nw-usermsg-bar, rgba(130, 175, 255, 0.9)),
-                inset 0 1px 0 var(--nw-usermsg-bar, rgba(130, 175, 255, 0.45)),
-                inset 0 -1px 0 var(--nw-usermsg-bar, rgba(130, 175, 255, 0.45));
+                inset 1px 0 0 rgba(255, 255, 255, 0.1),
+                inset -1px 0 0 rgba(255, 255, 255, 0.1);
         }
 
-        // where the agent's answer begins: a hairline so turns stop running together
-        .xterm-rows > div.nw-turnstart {
-            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+        .xterm-rows > div.nw-usermsg.nw-blk-start {
+            border-radius: 8px 8px 0 0;
+            box-shadow:
+                inset 0 1px 0 var(--nw-usermsg-bar, rgba(51, 255, 51, 0.55)),
+                inset 1px 0 0 var(--nw-usermsg-edge, rgba(51, 255, 51, 0.35)),
+                inset -1px 0 0 var(--nw-usermsg-edge, rgba(51, 255, 51, 0.35));
+        }
+
+        .xterm-rows > div.nw-usermsg.nw-blk-end {
+            border-radius: 0 0 8px 8px;
+            box-shadow:
+                inset 0 -1px 0 var(--nw-usermsg-bar, rgba(51, 255, 51, 0.55)),
+                inset 1px 0 0 var(--nw-usermsg-edge, rgba(51, 255, 51, 0.35)),
+                inset -1px 0 0 var(--nw-usermsg-edge, rgba(51, 255, 51, 0.35));
+        }
+
+        .xterm-rows > div.nw-usermsg.nw-blk-start.nw-blk-end {
+            border-radius: 8px;
+            box-shadow:
+                inset 0 1px 0 var(--nw-usermsg-bar, rgba(51, 255, 51, 0.55)),
+                inset 0 -1px 0 var(--nw-usermsg-bar, rgba(51, 255, 51, 0.55)),
+                inset 1px 0 0 var(--nw-usermsg-edge, rgba(51, 255, 51, 0.35)),
+                inset -1px 0 0 var(--nw-usermsg-edge, rgba(51, 255, 51, 0.35));
+        }
+
+        .xterm-rows > div.nw-agentmsg.nw-blk-start {
+            border-radius: 8px 8px 0 0;
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.16),
+                inset 1px 0 0 rgba(255, 255, 255, 0.1),
+                inset -1px 0 0 rgba(255, 255, 255, 0.1);
+        }
+
+        .xterm-rows > div.nw-agentmsg.nw-blk-end {
+            border-radius: 0 0 8px 8px;
+            box-shadow:
+                inset 0 -1px 0 rgba(255, 255, 255, 0.16),
+                inset 1px 0 0 rgba(255, 255, 255, 0.1),
+                inset -1px 0 0 rgba(255, 255, 255, 0.1);
+        }
+
+        .xterm-rows > div.nw-agentmsg.nw-blk-start.nw-blk-end {
+            border-radius: 8px;
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.16),
+                inset 0 -1px 0 rgba(255, 255, 255, 0.16),
+                inset 1px 0 0 rgba(255, 255, 255, 0.1),
+                inset -1px 0 0 rgba(255, 255, 255, 0.1);
         }
     }
 }
