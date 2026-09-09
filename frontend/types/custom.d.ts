@@ -140,6 +140,7 @@ declare global {
         setRunningSessions: (names: string[]) => void; // set-running-sessions
         showSessionNotification: (title: string, body: string) => void; // show-session-notification
         setWaitingCount: (count: number) => void; // set-waiting-count
+        getExternalBrowserPath: (browser?: string) => string; // get-external-browser-path
     };
 
     type ElectronContextMenuItem = {

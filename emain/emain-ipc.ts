@@ -24,6 +24,7 @@ import { createBuilderWindow, getAllBuilderWindows, getBuilderWindowByWebContent
 import { callWithOriginalXdgCurrentDesktopAsync, unamePlatform } from "./emain-platform";
 import { getWaveTabViewByWebContentsId } from "./emain-tabview";
 import { handleCtrlShiftState } from "./emain-util";
+import { admitExternalOpen, cleanExternalUrl } from "./externalopen";
 import { getWaveVersion } from "./emain-wavesrv";
 import { createNewWaveWindow, getWaveWindowByWebContentsId } from "./emain-window";
 import { ElectronWshClient } from "./emain-wsh";
@@ -240,14 +241,19 @@ export function initIpcHandlers() {
         }
         // last line of defence against a quoted URL ("https://… ) reaching the browser as a
         // search term — the renderer trims these too, but this path is also used by other code
-        url = url.trim().replace(/^["'`<([]+/, "").replace(/["'`>)\].,]+$/, "");
+        url = cleanExternalUrl(url);
         // one link click must open exactly one browser
-        const now = Date.now();
-        if (url === lastExternalUrl && now - lastExternalOpenTs < 1000) {
+        const gate = admitExternalOpen(
+            lastExternalUrl ? { url: lastExternalUrl, ts: lastExternalOpenTs } : null,
+            url,
+            Date.now()
+        );
+        if (gate == null) {
+            console.log("open-external ignored as a repeat of the previous request");
             return;
         }
-        lastExternalUrl = url;
-        lastExternalOpenTs = now;
+        lastExternalUrl = gate.url;
+        lastExternalOpenTs = gate.ts;
         // web:externalbrowser pins links to one browser instead of the OS default. The URL is
         // passed as its own argv entry, so nothing can quote-mangle it the way a shell would.
         // Logged on every path: when two browsers appear for one click, this line is what
@@ -511,6 +517,12 @@ export function initIpcHandlers() {
         } catch (e) {
             console.error("failed to show session notification", e);
         }
+    });
+
+    // Resolved path of the browser links should open in, so terminal sessions can pass it to
+    // the tools they run (BROWSER=...). Without it a CLI opens whatever it feels like.
+    electron.ipcMain.on("get-external-browser-path", (event, browser?: string) => {
+        event.returnValue = browser ? (resolveBrowserPath(browser) ?? "") : "";
     });
 
     // sidebar pushes up which agent sessions are mid-turn / live, for the quit warning

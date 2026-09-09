@@ -58,6 +58,7 @@ contextBridge.exposeInMainWorld("api", {
     setRunningSessions: (names) => ipcRenderer.send("set-running-sessions", names),
     showSessionNotification: (title, body) => ipcRenderer.send("show-session-notification", title, body),
     setWaitingCount: (count) => ipcRenderer.send("set-waiting-count", count),
+    getExternalBrowserPath: (browser) => ipcRenderer.sendSync("get-external-browser-path", browser),
     onWaveInit: (callback) => ipcRenderer.on("wave-init", (_event, initOpts) => callback(initOpts)),
     onBuilderInit: (callback) => ipcRenderer.on("builder-init", (_event, initOpts) => callback(initOpts)),
     sendLog: (log) => ipcRenderer.send("fe-log", log),

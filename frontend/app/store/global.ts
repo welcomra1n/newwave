@@ -533,6 +533,11 @@ function getLocalHostDisplayNameAtom(): Atom<string> {
  * @param uri The link to open.
  * @param forceOpenInternally Force the link to open in a new web widget.
  */
+// Defense in depth against a link opening two browsers: the main process de-dupes too, but a
+// duplicated provider or a double click should not even reach it.
+let lastOpenedUri = "";
+let lastOpenedTs = 0;
+
 async function openLink(uri: string, forceOpenInternally = false) {
     // strip wrapping quotes/brackets/angle-brackets and trailing punctuation the terminal
     // link matcher sometimes grabs — otherwise the OS gets a malformed URL and won't open it.
@@ -549,6 +554,12 @@ async function openLink(uri: string, forceOpenInternally = false) {
         };
         await createBlock(blockDef);
     } else {
+        const now = Date.now();
+        if (uri === lastOpenedUri && now - lastOpenedTs < 2000) {
+            return;
+        }
+        lastOpenedUri = uri;
+        lastOpenedTs = now;
         // web:externalbrowser lets links bypass the OS default browser (e.g. always Chrome)
         const browser = globalStore.get(atoms.settingsAtom)?.["web:externalbrowser"];
         getApi().openExternal(uri, browser || undefined);

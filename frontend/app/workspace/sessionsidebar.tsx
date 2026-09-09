@@ -285,6 +285,20 @@ function findOpenBlockId(sessionid: string): string | null {
     return null;
 }
 
+// Tools an agent runs (gh, npm, docs openers) launch a browser of their own choosing unless
+// BROWSER says otherwise — which is how a second, unwanted browser ends up on screen. Session
+// blocks get the same browser the app itself uses.
+function browserEnv(): Record<string, string> | undefined {
+    try {
+        const configured = globalStore.get(atoms.settingsAtom)?.["web:externalbrowser"];
+        if (!configured) return undefined;
+        const path = updApi().getExternalBrowserPath?.(configured);
+        return path ? { BROWSER: path } : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
 // Last working dir a session was opened in — reused as the default cwd for "새 세션".
 let lastSessionCwd: string | undefined;
 
@@ -308,6 +322,7 @@ export function openSession(s: CliSessionEntry) {
             controller: "cmd",
             cmd: cmd,
             "cmd:cwd": s.cwd || undefined,
+            "cmd:env": browserEnv(),
             // carry the custom name + color into the block header
             ...(s.alias ? { "frame:text": s.alias } : {}),
             ...(s.color
@@ -350,6 +365,7 @@ function newSession(agent: "claude" | "codex") {
             cmd,
             // start in the last folder a session was opened from (falls back to app default)
             "cmd:cwd": lastSessionCwd || undefined,
+            "cmd:env": browserEnv(),
         },
     };
     fireAndForget(() => createBlock(blockDef));
