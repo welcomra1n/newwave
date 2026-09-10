@@ -3,6 +3,12 @@
 
 const previewElectronApi: ElectronApi = {
     getAuthKey: () => "",
+    checkForUpdates: () => {},
+    getPathForFile: (_file: File) => "",
+    setRunningSessions: (_names: string[]) => {},
+    showSessionNotification: (_title: string, _body: string) => {},
+    setWaitingCount: (_count: number) => {},
+    getExternalBrowserPath: (_browser?: string) => "",
     getIsDev: () => false,
     getCursorPoint: () => ({ x: 0, y: 0 }) as Electron.Point,
     getPlatform: () => "darwin",

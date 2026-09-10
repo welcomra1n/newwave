@@ -11,9 +11,9 @@
     width: 200px;
 }
 
-.view-term.usermsg-off .xterm-rows > div.nw-usermsg {
-    background-color: transparent;
-    box-shadow: none;
+// term:usermsghighlight = false turns both speakers' bubbles off, not just the user's
+.view-term.usermsg-off .xterm-rows > div.nw-blk-start::before {
+    display: none;
 }
 
 // only recolor the text when term:usermsgcolor is set, so the agent's own colors survive otherwise
@@ -146,72 +146,41 @@
             background-color: transparent;
         }
 
-        // Conversation boxes (usermsg-highlight.ts). Each speaker's block is filled and gets
-        // rounded ends; blank rows sit outside the boxes and read as the gap between turns.
-        // Borders would change row height and desync the terminal, so every edge is an
-        // inset shadow.
-        .xterm-rows > div.nw-usermsg {
-            background-color: var(--nw-usermsg-bg, rgba(51, 255, 51, 0.1));
-            box-shadow:
-                inset 1px 0 0 var(--nw-usermsg-edge, rgba(51, 255, 51, 0.35)),
-                inset -1px 0 0 var(--nw-usermsg-edge, rgba(51, 255, 51, 0.35));
+        // Chat bubbles (usermsg-highlight.ts). One rounded shape per turn, drawn behind
+        // the text by the turn's first row and stretched over the rows below it. Row height
+        // is what the terminal measures its coordinates against, so the shape is absolutely
+        // positioned and never enters layout: it overhangs the blank rows above and below
+        // for vertical padding, and stops at the width of the longest line in the turn.
+        //
+        // The z-index pair matters. The row needs its own stacking context, otherwise the
+        // shape at z-index -1 sinks behind the terminal background and only its outline
+        // shows through — which is exactly how this looked when it was wrong.
+        .xterm-rows > div {
+            position: relative;
+            z-index: 0;
         }
 
-        .xterm-rows > div.nw-agentmsg {
-            background-color: var(--nw-agentmsg-bg, rgba(255, 255, 255, 0.035));
-            box-shadow:
-                inset 1px 0 0 rgba(255, 255, 255, 0.1),
-                inset -1px 0 0 rgba(255, 255, 255, 0.1);
+        .xterm-rows > div.nw-blk-start::before {
+            content: "";
+            position: absolute;
+            z-index: -1;
+            pointer-events: none;
+            left: -5px;
+            top: calc(0px - var(--nw-pad-top, 0px));
+            width: calc(var(--nw-blk-cols, 20) * var(--nw-cell-w, 8px) + 12px);
+            max-width: calc(100% + 5px);
+            height: calc(var(--nw-blk-rows, 1) * 100% + var(--nw-pad-top, 0px) + var(--nw-pad-bot, 0px));
+            border-radius: 10px;
         }
 
-        .xterm-rows > div.nw-usermsg.nw-blk-start {
-            border-radius: 8px 8px 0 0;
-            box-shadow:
-                inset 0 1px 0 var(--nw-usermsg-bar, rgba(51, 255, 51, 0.55)),
-                inset 1px 0 0 var(--nw-usermsg-edge, rgba(51, 255, 51, 0.35)),
-                inset -1px 0 0 var(--nw-usermsg-edge, rgba(51, 255, 51, 0.35));
+        .xterm-rows > div.nw-usermsg.nw-blk-start::before {
+            background-color: var(--nw-usermsg-bg, rgba(51, 255, 51, 0.13));
+            box-shadow: inset 0 0 0 1px var(--nw-usermsg-edge, rgba(51, 255, 51, 0.4));
         }
 
-        .xterm-rows > div.nw-usermsg.nw-blk-end {
-            border-radius: 0 0 8px 8px;
-            box-shadow:
-                inset 0 -1px 0 var(--nw-usermsg-bar, rgba(51, 255, 51, 0.55)),
-                inset 1px 0 0 var(--nw-usermsg-edge, rgba(51, 255, 51, 0.35)),
-                inset -1px 0 0 var(--nw-usermsg-edge, rgba(51, 255, 51, 0.35));
-        }
-
-        .xterm-rows > div.nw-usermsg.nw-blk-start.nw-blk-end {
-            border-radius: 8px;
-            box-shadow:
-                inset 0 1px 0 var(--nw-usermsg-bar, rgba(51, 255, 51, 0.55)),
-                inset 0 -1px 0 var(--nw-usermsg-bar, rgba(51, 255, 51, 0.55)),
-                inset 1px 0 0 var(--nw-usermsg-edge, rgba(51, 255, 51, 0.35)),
-                inset -1px 0 0 var(--nw-usermsg-edge, rgba(51, 255, 51, 0.35));
-        }
-
-        .xterm-rows > div.nw-agentmsg.nw-blk-start {
-            border-radius: 8px 8px 0 0;
-            box-shadow:
-                inset 0 1px 0 rgba(255, 255, 255, 0.16),
-                inset 1px 0 0 rgba(255, 255, 255, 0.1),
-                inset -1px 0 0 rgba(255, 255, 255, 0.1);
-        }
-
-        .xterm-rows > div.nw-agentmsg.nw-blk-end {
-            border-radius: 0 0 8px 8px;
-            box-shadow:
-                inset 0 -1px 0 rgba(255, 255, 255, 0.16),
-                inset 1px 0 0 rgba(255, 255, 255, 0.1),
-                inset -1px 0 0 rgba(255, 255, 255, 0.1);
-        }
-
-        .xterm-rows > div.nw-agentmsg.nw-blk-start.nw-blk-end {
-            border-radius: 8px;
-            box-shadow:
-                inset 0 1px 0 rgba(255, 255, 255, 0.16),
-                inset 0 -1px 0 rgba(255, 255, 255, 0.16),
-                inset 1px 0 0 rgba(255, 255, 255, 0.1),
-                inset -1px 0 0 rgba(255, 255, 255, 0.1);
+        .xterm-rows > div.nw-agentmsg.nw-blk-start::before {
+            background-color: var(--nw-agentmsg-bg, rgba(255, 255, 255, 0.05));
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.13);
         }
     }
 }

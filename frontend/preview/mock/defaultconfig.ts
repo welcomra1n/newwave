@@ -10,6 +10,8 @@ import waveaiJson from "../../../pkg/wconfig/defaultconfig/waveai.json";
 import widgetsJson from "../../../pkg/wconfig/defaultconfig/widgets.json";
 
 export const DefaultFullConfig: FullConfigType = {
+    version: "0.0.0-preview",
+    buildtime: "",
     settings: settingsJson as SettingsType,
     mimetypes: mimetypesJson as unknown as { [key: string]: MimeTypeConfigType },
     defaultwidgets: widgetsJson as unknown as { [key: string]: WidgetConfigType },

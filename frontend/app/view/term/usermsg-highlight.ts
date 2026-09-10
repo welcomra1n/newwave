@@ -1,14 +1,19 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Draws the conversation as two kinds of boxes: the user's own turns and the agent's
-// answers. Without it a session is one undifferentiated wall of text and you cannot see
-// where one exchange ends and the next begins.
+// Draws the conversation as chat bubbles: one rounded shape per turn, behind the text.
+// Without it a session is one undifferentiated wall of text and you cannot see where one
+// exchange ends and the next begins.
 //
-// Each speaker's block gets a filled background, a rounded top on its first row and a
-// rounded bottom on its last. Blank rows stay outside the boxes, which reads as the gap
-// between messages — real padding is impossible here, because xterm's rows are fixed-height
-// boxes whose geometry the terminal itself depends on.
+// The shape is a single pseudo-element on the turn's first row, stretched over the rows
+// below it. Painting each row separately was tried first and read as a stack of colored
+// strips rather than a bubble — the seams between rows are what gave it away.
+//
+// Nothing here touches the terminal's geometry, which is the hard constraint: xterm's rows
+// are fixed-height boxes it measures its own coordinates against, so borders, padding and
+// margins are out. The bubble is absolutely positioned instead, which lets it overhang the
+// blank rows above and below for vertical breathing room and stop short of the pane's right
+// edge, so a turn is only as wide as what was actually said.
 //
 // DOM-renderer only: it tags the row elements xterm renders per viewport line. NewWave
 // defaults to the DOM renderer (term:disablewebgl), so this is on by default; with the
@@ -20,6 +25,10 @@ const USER_CLASS = "nw-usermsg";
 const AGENT_CLASS = "nw-agentmsg";
 const BLOCK_START = "nw-blk-start";
 const BLOCK_END = "nw-blk-end";
+const PAD = "4px";
+const NO_PAD = "0px";
+// a turn narrower than this reads as a smudge rather than a bubble
+const MIN_COLS = 10;
 
 // "> text" (claude), "› " / "❯ " / "» " (codex + prompt variants). A small left indent is
 // allowed, but the marker must be followed by real content so bare ">" prompts and
@@ -57,12 +66,67 @@ export function classifyRows(rows: { text: string; isWrapped: boolean }[]): Spea
     });
 }
 
+// Terminal columns a string occupies. Korean, CJK and emoji take two cells each, and the
+// bubble is sized in cells, so counting characters would cut a Korean turn in half.
+export function cellWidth(text: string): number {
+    let width = 0;
+    for (const ch of text) {
+        const cp = ch.codePointAt(0) ?? 0;
+        const wide =
+            (cp >= 0x1100 && cp <= 0x115f) || // hangul jamo
+            (cp >= 0x2e80 && cp <= 0xa4cf) || // cjk radicals .. yi
+            (cp >= 0xac00 && cp <= 0xd7a3) || // hangul syllables
+            (cp >= 0xf900 && cp <= 0xfaff) || // cjk compatibility ideographs
+            (cp >= 0xfe30 && cp <= 0xfe6f) || // cjk compatibility forms
+            (cp >= 0xff00 && cp <= 0xff60) || // fullwidth forms
+            (cp >= 0xffe0 && cp <= 0xffe6) ||
+            (cp >= 0x1f300 && cp <= 0x1f64f) || // emoji
+            (cp >= 0x1f900 && cp <= 0x1f9ff);
+        width += wide ? 2 : 1;
+    }
+    return width;
+}
+
+export type Block = { start: number; end: number; who: "user" | "agent" };
+
+// The runs of consecutive rows belonging to one speaker — one bubble each.
+export function computeBlocks(speakers: Speaker[]): Block[] {
+    const blocks: Block[] = [];
+    for (let i = 0; i < speakers.length; i++) {
+        const who = speakers[i];
+        if (who == null) continue;
+        if (i > 0 && speakers[i - 1] === who) continue;
+        let end = i;
+        while (end + 1 < speakers.length && speakers[end + 1] === who) end++;
+        blocks.push({ start: i, end, who });
+    }
+    return blocks;
+}
+
+// How far the bubble may overhang above and below. It may only grow into a blank row, so
+// two turns that follow each other without a gap never overlap; at the viewport edge the
+// turn probably continues off-screen, so it stays flush.
+export function blockPadding(speakers: Speaker[], block: Block): { top: string; bottom: string } {
+    return {
+        top: block.start > 0 && speakers[block.start - 1] == null ? PAD : NO_PAD,
+        bottom: block.end < speakers.length - 1 && speakers[block.end + 1] == null ? PAD : NO_PAD,
+    };
+}
+
 export function attachUserMsgHighlight(terminal: Terminal): IDisposable {
     const apply = () => {
-        const rowsEl = terminal.element?.querySelector(".xterm-rows");
+        const rowsEl = terminal.element?.querySelector(".xterm-rows") as HTMLElement | null;
         if (!rowsEl) return;
         const buf = terminal.buffer.active;
         const rowEls = rowsEl.children;
+
+        // The bubble's width is expressed in cells, so it needs the real measured cell
+        // width — 1ch is close, but drifts by a few pixels over a long line.
+        const screenEl = terminal.element?.querySelector(".xterm-screen") as HTMLElement | null;
+        if (screenEl && terminal.cols > 0) {
+            rowsEl.style.setProperty("--nw-cell-w", `${screenEl.clientWidth / terminal.cols}px`);
+        }
+
         const lines: { text: string; isWrapped: boolean }[] = [];
         for (let i = 0; i < rowEls.length; i++) {
             const line = buf.getLine(buf.viewportY + i);
@@ -76,6 +140,25 @@ export function attachUserMsgHighlight(terminal: Terminal): IDisposable {
             el.classList.toggle(AGENT_CLASS, who === "agent");
             el.classList.toggle(BLOCK_START, who != null && speakers[i - 1] !== who);
             el.classList.toggle(BLOCK_END, who != null && speakers[i + 1] !== who);
+            // rows are recycled as the viewport scrolls, so a row that no longer starts a
+            // turn has to give up the shape it was drawing
+            el.style.removeProperty("--nw-blk-rows");
+            el.style.removeProperty("--nw-blk-cols");
+            el.style.removeProperty("--nw-pad-top");
+            el.style.removeProperty("--nw-pad-bot");
+        }
+        for (const block of computeBlocks(speakers)) {
+            const el = rowEls[block.start] as HTMLElement;
+            if (el == null) continue;
+            let cols = MIN_COLS;
+            for (let i = block.start; i <= block.end; i++) {
+                cols = Math.max(cols, cellWidth(lines[i].text.trimEnd()));
+            }
+            const pad = blockPadding(speakers, block);
+            el.style.setProperty("--nw-blk-rows", String(block.end - block.start + 1));
+            el.style.setProperty("--nw-blk-cols", String(Math.min(cols + 1, terminal.cols)));
+            el.style.setProperty("--nw-pad-top", pad.top);
+            el.style.setProperty("--nw-pad-bot", pad.bottom);
         }
     };
 

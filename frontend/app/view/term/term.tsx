@@ -28,6 +28,7 @@ import { TermStickers } from "./termsticker";
 import { TermThemeUpdater } from "./termtheme";
 import { computeTheme, normalizeCursorStyle } from "./termutil";
 import { TermWrap } from "./termwrap";
+import { userMsgVars } from "./usermsg-colors";
 import "./xterm.css";
 
 const dlog = debug("wave:term");
@@ -453,12 +454,9 @@ const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => 
     const userMsgOn = jotai.useAtomValue(getSettingsKeyAtom("term:usermsghighlight")) ?? true;
     const userMsgBg = jotai.useAtomValue(getSettingsKeyAtom("term:usermsgbg"));
     const userMsgColor = jotai.useAtomValue(getSettingsKeyAtom("term:usermsgcolor"));
-    const userMsgStyle: React.CSSProperties = {};
-    if (userMsgBg) userMsgStyle["--nw-usermsg-bg" as any] = userMsgBg;
-    if (userMsgColor) {
-        userMsgStyle["--nw-usermsg-fg" as any] = userMsgColor;
-        userMsgStyle["--nw-usermsg-bar" as any] = userMsgColor; // left bar follows the text color
-    }
+    // normalized in usermsg-colors.ts: a setting that isn't a valid CSS color would
+    // otherwise wipe out the box fill and leave only its edges on screen
+    const userMsgStyle = userMsgVars(userMsgBg, userMsgColor) as React.CSSProperties;
 
     return (
         <div
