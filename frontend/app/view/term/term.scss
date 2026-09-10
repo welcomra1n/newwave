@@ -21,6 +21,14 @@
     color: var(--nw-usermsg-fg) !important;
 }
 
+// The CLI paints its own background across the user's input line, all the way to the right
+// edge — that is the full-width grey band that showed up behind the bubbles, and it comes
+// from claude/codex, not from here (measured: those cells render rgb(58,58,62)). On rows
+// that are the user's own turn the bubble is the background, so the CLI's is cleared.
+.view-term:not(.usermsg-off) .xterm-rows > div.nw-usermsg span {
+    background-color: transparent !important;
+}
+
 .view-term {
     display: flex;
     flex-direction: column;
