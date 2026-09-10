@@ -12,7 +12,7 @@
 }
 
 // term:usermsghighlight = false turns both speakers' bubbles off, not just the user's
-.view-term.usermsg-off .xterm-rows > div.nw-blk-start::before {
+.view-term.usermsg-off .nw-bubbles {
     display: none;
 }
 
@@ -146,39 +146,32 @@
             background-color: transparent;
         }
 
-        // Chat bubbles (usermsg-highlight.ts). One rounded shape per turn, drawn behind
-        // the text by the turn's first row and stretched over the rows below it. Row height
-        // is what the terminal measures its coordinates against, so the shape is absolutely
-        // positioned and never enters layout: it overhangs the blank rows above and below
-        // for vertical padding, and stops at the width of the longest line in the turn.
+        // Chat bubbles (usermsg-highlight.ts). One rounded shape per turn, sized and
+        // positioned in JS on a layer of its own behind the text.
         //
-        // The z-index pair matters. The row needs its own stacking context, otherwise the
-        // shape at z-index -1 sinks behind the terminal background and only its outline
-        // shows through — which is exactly how this looked when it was wrong.
-        .xterm-rows > div {
-            position: relative;
-            z-index: 0;
+        // The layer exists because the shapes cannot live on the row elements: xterm sets
+        // overflow:hidden on every row, which clips anything that reaches past a single
+        // row — the vertical padding and every row of a turn after the first. Row height is
+        // also what the terminal measures its coordinates against, so it must stay
+        // untouched. The layer sits inside .xterm-screen and shares its coordinates.
+        .xterm-screen > .nw-bubbles {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
         }
 
-        .xterm-rows > div.nw-blk-start::before {
-            content: "";
+        .nw-bubbles > div {
             position: absolute;
-            z-index: -1;
-            pointer-events: none;
             left: -5px;
-            top: calc(0px - var(--nw-pad-top, 0px));
-            width: calc(var(--nw-blk-cols, 20) * var(--nw-cell-w, 8px) + 12px);
-            max-width: calc(100% + 5px);
-            height: calc(var(--nw-blk-rows, 1) * 100% + var(--nw-pad-top, 0px) + var(--nw-pad-bot, 0px));
             border-radius: 10px;
         }
 
-        .xterm-rows > div.nw-usermsg.nw-blk-start::before {
+        .nw-bubbles > div.nw-bubble-user {
             background-color: var(--nw-usermsg-bg, rgba(51, 255, 51, 0.13));
             box-shadow: inset 0 0 0 1px var(--nw-usermsg-edge, rgba(51, 255, 51, 0.4));
         }
 
-        .xterm-rows > div.nw-agentmsg.nw-blk-start::before {
+        .nw-bubbles > div.nw-bubble-agent {
             background-color: var(--nw-agentmsg-bg, rgba(255, 255, 255, 0.05));
             box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.13);
         }

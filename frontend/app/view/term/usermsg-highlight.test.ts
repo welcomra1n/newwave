@@ -58,11 +58,11 @@ describe("bubble geometry", () => {
     it("only overhangs into a blank row, so back-to-back turns cannot overlap", () => {
         const speakers = classifyRows(rows("● 답변입니다", "> 다시 해줘", "", "● 다시 합니다"));
         const blocks = computeBlocks(speakers);
-        expect(blockPadding(speakers, blocks[1])).toEqual({ top: "0px", bottom: "4px" });
+        expect(blockPadding(speakers, blocks[1])).toEqual({ top: 0, bottom: 4 });
     });
 
     it("stays flush at the viewport edge, where the turn continues off-screen", () => {
         const speakers = classifyRows(rows("> 첫 줄", "  둘째 줄"));
-        expect(blockPadding(speakers, computeBlocks(speakers)[0])).toEqual({ top: "0px", bottom: "0px" });
+        expect(blockPadding(speakers, computeBlocks(speakers)[0])).toEqual({ top: 0, bottom: 0 });
     });
 });
